@@ -2097,6 +2097,7 @@ one handling:
 | No `text-overflow: ellipsis` | boxes that need an ellipsis | `Truncate` (`src/window/truncate.rs`) measures the text and cuts it with `…` |
 | `:has()` is not a valid selector; one invalid selector drops its whole selector list | the shared hover rule in `assets/app.css` | Never use `:has()`. Mark the element (`data-hover-frame`) and select the marker. `a_filled_button_paints_the_hover_veil_under_the_pointer` guards the hover rule. |
 | An inset `box-shadow` with a spread past half the box paints nothing (the renderer takes `rect.abs()` of the inverted hole) | the hover veil | The veil is a one-colour `linear-gradient` in `background-image` with `!important`, not a `box-shadow`. |
+| An inset `box-shadow` averages the corner radii of its box, and a soft edge needs an alpha colour | a well segment whose top corners alone are rounded | Solid 1 px edge lines, not a shadow: `--canvas-tree-well-shade` on the well's top edge and `--canvas-border` on its bottom lip (`gui-tree-row-roles` design D3, R1). |
 | No container queries (`cq*` units) | the player stage's control-row scale | The window measures the stage and sets `--player-scale` (design D3 of `gui-art-player-overlay`). |
 | An animation repaints the whole window | `animate-spin`, `transition` classes | Accepted. They run only while shown. |
 | No `NetHandler` error callback | artwork misses | The net provider sends `ArtEvent::Failed` (`src/window/net.rs`) |
@@ -2192,7 +2193,7 @@ list: even rows are the pane's `#272e33`, odd rows `--canvas-list-stripe`
 `LibraryHeroActions` the Play and Enqueue buttons,
 `LibraryDropdown` the Shows Workspace's season dropdown (a radio row per
 season and a filter field, one open state in `LibraryUiState.shows_seasons`),
-`FlatRow` and `TreeRow` the rows of
+`FlatRow`, `BranchRow`, and `LeafRow` the rows of
 every list, `LibraryLetterHeading` the letter and section headings, and
 `LibraryVirtualList` the scroller of every list.
 The episode row state is one module
@@ -2207,10 +2208,16 @@ destination's Hero imports Shows logic.
 (`crates/mbv-gui/src/window/components/list_row/flat.rs`) is the top-level row
 part of every destination (`gui-delineated-rows` design D1, D2): Home, the Emby
 lists, the Music artist rows, the Shows series rows, the New and Upcoming rows,
-Audiobooks, Podcasts, and Feeds. `TreeRow`
-(`crates/mbv-gui/src/window/components/list_row/tree.rs`) paints the nested
-parent and leaf rows, and `list_row.rs` and `list_row/thumb.rs` hold the shared
-rules, the level constants, and the thumb painter. A destination supplies its hook
+Audiobooks, Podcasts, and Feeds. `BranchRow`
+(`crates/mbv-gui/src/window/components/list_row/branch.rs`) paints a tree's
+branch rows and `LeafRow`
+(`crates/mbv-gui/src/window/components/list_row/leaf.rs`) its leaf rows, and
+`list_row.rs`, `list_row/thumb.rs`, and `components/tree_rail.rs` hold the
+shared rules, the level constants, the thumb painter, and the rail and swatch
+names. `TreeRow`
+(`crates/mbv-gui/src/window/components/list_row/tree.rs`) still paints the
+nested rows of the Shows All and Playlists trees until their groups move
+(`gui-tree-row-roles` design D8). A destination supplies its hook
 prefix (`data-library-<attr>-*`), its text, its thumb, and its handlers, and
 never restates the look. The row is 56 px high with square corners, an 8 px
 inline padding, a 12 px gap, and a 1 px `--canvas-border` divider under it;
@@ -2223,26 +2230,54 @@ fill, with rounded corners, and a row with
 no image paints the media kind's `EighthNotes` or `MonitorPlay` icon on
 `--canvas-muted`. The row's resume percent paints in 3 px along the box's
 bottom edge, on `--canvas-thumb-track` under `--canvas-partial`, and no row
-paints a progress run under itself. A top-level tree node — a Music artist row
-or a Shows series row — also names its open state (`gui-tree-double-click`
-design D1 to D3). A press on a tree parent row picks it and opens or closes
-nothing; its double-click opens the row when it is closed and closes it when
-it is open, and plays nothing. No tree row paints an open-or-closed glyph or
-keeps a spacer where one stood: the nested rows' indent comes only from the
-row inset (Music artist 8 px, album 56 px, track 68 px; Shows series 8 px,
-season 56 px, episode 68 px; Playlists playlist 8 px, item 56 px). Every open
-tree parent that shows child rows hangs a 1 px guide under its leading element
-through its subtree, painted per row by the shared `TreeGuide` part
+paints a progress run under itself. A top-level tree node — a Music artist row,
+a Shows series row, or a Playlists playlist row — also names its open state
+(`gui-tree-double-click` design D1 to D3). A press on a tree parent row picks
+it and opens or closes nothing; its double-click opens the row when it is
+closed and closes it when it is open, and plays nothing. The part carries the
+row's `aria-expanded`, and a double-click on a leaf row still plays the row's
+item, as its Enter play does.
+
+The Music tree paints its groups with rails and a leaf well, one segment per
+row, so the look stays whole while only the rows in view paint
+(`gui-tree-row-roles` design D2, D3). An open artist row paints the root rail:
+`TreeRail { tone: Open }`, a 3 px `--canvas-tree-rail` span at the row's left
+edge over its full height. Every album and track row under it paints the
+group's own segment — the `--canvas-tree-subtree` fill and a muted 3 px
+`TreeRail { tone: Group }` in `--canvas-tree-rail-muted` — and the group's last
+row paints the 1 px `--canvas-border` divider the open artist row gave up
+(`subtree_tails`). A Music album row paints through `BranchRow`: 42 px high,
+with its Branch swatch — a 28 × 28 px square of 4 px radius, 20 px in from the
+row's left edge — whose colour `swatch_var` picks from `--canvas-tree-swatch-1`
+to `-5` by the row's position among its painted siblings; the title over a mono
+11 px facts line (the year, and an open album's `N tracks · total`); the open
+fill `--canvas-tree-branch-open`, or `--canvas-tree-branch-open-picked` when
+the Hero's item is open too; and the 14 px chevron state mark, `ChevronRight`
+closed and `ChevronDown` open, which hides with the trail under the hover
+controls. A Music track row paints through `LeafRow`: an outer strip in the
+group fill, and inside it the Leaf well's segment — `--canvas-tree-well`, 6 px
+rounded on the well's outer corners and square on the inner seams, with the
+4 px top gap and 6 px bottom gap carried in the row's own height (`WellEdge`).
+The well's first and last segments clip their content to its corners, its top
+edge paints a 1 px `--canvas-tree-well-shade` line and its bottom edge a 1 px
+`--canvas-border` lip, and its inner rows a 1 px `--canvas-tree-well-rule`
+separator. The two parts carry the `data-tree-swatch` and `data-tree-well`
+hooks beside the shared `data-library-*` ones.
+
+The Shows All and Playlists trees still paint `TreeRow` and its indent guides
+until their groups move (`gui-tree-row-roles` design D8). In those trees no
+tree row paints an open-or-closed glyph or keeps a spacer where one stood: the
+nested rows' indent comes only from the row inset (Shows series 8 px, season
+56 px, episode 68 px; Playlists playlist 8 px, item 56 px). Every open tree
+parent that shows child rows hangs a 1 px guide through its subtree, painted
+per row by the shared `TreeGuide` part
 (`crates/mbv-gui/src/window/components/tree_guide.rs`), so the guide stays
-whole while only the rows in view paint. A top-level parent's guide paints in
-`--canvas-tree-guide` and a nested parent's guide in
-`--canvas-tree-guide-nested`. The part carries the row's `aria-expanded`. The
-rule is one for every GUI tree parent: a Music album, a Shows season, and a
-Playlists playlist paint through `TreeRow` and take the same press, the same
-double-click, and the same `aria-expanded`, while a leaf row — a track, an
-episode, or a playlist item — takes none of them. A double-click on a leaf
-row still plays the row's item, as its Enter play does. Nested rows paint
-through `TreeRow`: a Music album or track, and a Shows season or episode.
+whole while only the rows in view paint; a nested parent's guide paints in
+`--canvas-tree-guide-nested`. A Shows season and a Playlists playlist take the
+same press, the same double-click, and the same `aria-expanded` as a Music
+album, while a Shows episode and a Playlists item are leaves that take none of
+them. Nested rows paint through `TreeRow`: a Shows season or episode and a
+Playlists item.
 
 Under the pointer, a Library row reveals the shared `RowHoverActions` part
 (`crates/mbv-gui/src/window/components/row_hover_actions.rs`,
