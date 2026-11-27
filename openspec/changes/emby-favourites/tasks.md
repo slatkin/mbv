@@ -46,24 +46,24 @@ Tests are the implementer's choice under `docs/invariants/14-test-ownership.md`;
 
 ## 3. Library view type and dropdown
 
-- [ ] 3.1 Rename `GuiShowsView` to `GuiLibraryView` and the Shows view store, the `ShowsSetView`
+- [x] 3.1 Rename `GuiShowsView` to `GuiLibraryView` and the Shows view store, the `ShowsSetView`
   command, the frame field, and `LibraryShowsViewDropdown` to their destination-neutral names
   (design D5), adding the `Favourites` variant with key `favourites` and label "Favourites".
   Update `GuiLaunchShowsView` mapping so a saved Favourites becomes All. This unit may leave the
   workspace uncompilable if `Favourites` has unhandled arms; record that for 3.2. Verify:
   `rg "GuiShowsView|LibraryShowsViewDropdown" crates` returns no hit.
-- [ ] 3.2 Add `GuiLibraryView::choices(destination)` and handle `Favourites` in every `match` the
+- [x] 3.2 Add `GuiLibraryView::choices(destination)` and handle `Favourites` in every `match` the
   compiler names, including `set_shows_view`'s successor and `select_shows_row`. Shows offers All,
   New, Upcoming, and Favourites in that order; every other Emby destination offers All and
   Favourites.
-- [ ] 3.3 Paint the dropdown in the plain-library and Music list headers through the same
+- [x] 3.3 Paint the dropdown in the plain-library and Music list headers through the same
   `LibraryViewDropdown`, with Audiobookshelf and Feeds untouched. Music and feed-group Emby headers
   paint the collection dropdown and the view dropdown together (the header's `collections`/`view`
   branches stop being exclusive); the collection dropdown is hidden while the view is Favourites
   and returns with its pick intact on All. Follow the design D5 title line order and Favourites
   header rules: no sort control, no tree buttons, no collection dropdown.
-- [ ] 3.4 Pin launch persistence: Favourites saves as All and only Shows persists.
-- [ ] 3.5 Paint the Library Status bar's location as design D5 states: while the view is
+- [x] 3.4 Pin launch persistence: Favourites saves as All and only Shows persists.
+- [x] 3.5 Paint the Library Status bar's location as design D5 states: while the view is
   Favourites it names Favourites in place of the collection names.
 
 ## 4. Favourites data path
