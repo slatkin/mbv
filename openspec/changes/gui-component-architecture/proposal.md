@@ -107,6 +107,10 @@ None.
   neutral frames and resolve intents.
 - `crates/mbv-gui/src/core_thread.rs` and `core_thread/pointer.rs`: the GUI stops using
   `HitMap`, `PointerGestureState`, and the `QueueSurface` viewport.
+- `crates/mbv-gui/src/leaves.rs`, `attach.rs`, `bridge/layout.rs` (`hit_map`), and
+  `window/pointer_target.rs`: leaves take a `RegionTarget` instead of a point, the attach prompt
+  drops its own hit map, and `PointerList` carries a `GuiListId` instead of destination variants
+  (design D8). `window/sections.rs` drops the Playlists section.
 - Tests: per-destination painter tests become base-level contract tests in `mbv-gui`, and
   projection tests in `gui_core`.
 - Docs: invariants 30 and 38, `docs/architecture/gui-client.md`, `crates/mbv-gui/AGENTS.md`, and

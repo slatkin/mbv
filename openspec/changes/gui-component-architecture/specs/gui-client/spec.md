@@ -21,7 +21,7 @@ Every shape that the GUI paints more than once (a list of data, a Hero, a contro
 
 ### Requirement: Destinations differ only in data
 
-Every Library destination SHALL show its list and its Hero through the same list and Hero components, under the same interaction rules. A destination SHALL differ from another only in the rows, the Hero content, and the meaning of a row act that the Client core gives it. A fix to list or Hero behaviour SHALL reach every destination.
+Every Library destination SHALL show its list and its Hero through the same list and Hero components, under the same interaction rules. A destination SHALL differ from another only in the rows, the Hero content, and the meaning of a row act that the Client core gives it. A fix to list or Hero behaviour SHALL reach every destination. A destination here is a Library tab; the Settings screen's Services and Sessions sections and the Queue's output choosers are not destinations and keep their own owners.
 
 #### Scenario: A tree behaves the same in each destination
 

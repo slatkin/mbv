@@ -173,8 +173,10 @@ the destination accepts that asserts the resulting command.
   The build may stay red until task 6.4. Verify: `make checks PKG=mbv-gui` shows only errors at
   the old destination call sites.
 - [ ] 6.3 Replace `window/library/keys.rs`, `keys_shared.rs`, and the five `*_keys.rs` files with
-  one LIBRARY LIST key map that emits `GuiListAct` for the pointer row (D7). Contract test: one
-  per key act. Verify: the new tests pass.
+  one LIBRARY LIST key map that emits `GuiListAct` for the pointer row (D7). In
+  `window/pointer_target.rs`, replace the destination variants of `PointerList` with a
+  `GuiListId` token (D8). Contract test: one per key act. Verify: the new tests pass and
+  `rg -n 'Music|Shows|Emby|Audiobooks|Podcasts|Feeds' src/window/pointer_target.rs` prints nothing.
 - [ ] 6.4 Add FLAT (`list/library/flat.rs`) and mount it for Home, Emby (Favourites included),
   Audiobooks, Podcasts, Feeds, Search, and Shows New and Upcoming from the neutral section.
   Delete `library_lettered_list`, `library_home_list`, `window/library/lettered*`,
@@ -218,21 +220,25 @@ the destination accepts that asserts the resulting command.
 
 ## 9. LIBRARY composite and the neutral cut-over
 
-- [ ] 9.1 Make `library_panel.rs` the LIBRARY composite (BAR + LIST + HERO + BAR) that mounts
-  one list and one Hero from the neutral section, with no match on the destination. Verify:
-  `rg -n 'GuiLibraryView::|Destination' src/window/components/library` prints no destination
-  match.
+- [ ] 9.1 Make `library.rs` and `library/` (D1) the LIBRARY composite (BAR + LIST + HERO + BAR)
+  that mounts one list and one Hero from the neutral section, with no match on the destination;
+  `library_panel.rs` moves into it. Verify: `rg -n 'GuiLibraryView::|Destination'
+  src/window/components/library.rs src/window/components/library` prints no destination match.
 - [ ] 9.2 Delete the per-destination frames in `src/bridge/frame/library/` and
-  `src/bridge/frame/playlists.rs` that the neutral frames replace, and their sections. Verify:
+  `src/bridge/frame/playlists.rs` that the neutral frames replace, and their sections
+  (`window/sections.rs` `playlists` included). Verify:
   `make test PKG=mbv-gui` passes.
 - [ ] 9.3 Reduce `GuiLibraryCommand` and `GuiPlaylistsCommand` to the acts that are not list or
   Hero acts (D7), and delete the window functions that built the removed variants. Verify:
   `make test PKG=mbv-gui` passes and `rg -n 'press_shows_row|toggle_library_node|play_library_track'
   src` prints nothing.
-- [ ] 9.4 Verify that the window and the bridge are destination-free: `rg -n -i
-  'music|shows|emby|audiobook|podcast|feeds|playlist' src/window src/bridge --glob '!**/tests*'`
-  prints only token names, icon names, and comments; fix any other hit. Verify: the command's
-  output holds no type, function, or match arm that names a destination.
+- [ ] 9.4 Verify that the Library path is destination-free: `rg -n -i
+  'music|shows|emby|audiobook|podcast|feeds|playlist' src/window/components/library.rs
+  src/window/components/library src/window/components/list src/window/components/hero
+  src/window/library src/window/pointer_target.rs src/bridge/frame --glob '!**/tests*'` prints
+  only token names, icon names, and comments. Settings, Sessions, brand icons, and the Queue
+  output choosers are outside this check. Verify: the command's output holds no type, function,
+  or match arm that names a destination.
 
 ## 10. QUEUE and the single input system
 
@@ -249,11 +255,16 @@ the destination accepts that asserts the resulting command.
 - [ ] 10.4 Give every component that reports a region set a Dioxus handler that sends
   `GuiPointerAct` with its painted `RegionTarget` (D8): the player panel, the Status bar, the
   dialogs, the attach screen, the compact strip, the collapsed rail, and the track chips. In the
-  core, route `GuiPointerAct` to the per-target handling the hit map reaches today. Verify:
-  `make test PKG=mbv-gui` passes.
+  core, route `GuiPointerAct` to the per-target handling the hit map reaches today: rewrite
+  `QueueLeaf`, `PlaybackLeaf`, and `StatusBarLeaf` in `src/leaves.rs` to take the act's
+  `RegionTarget` (and the scrubber's `Seek(f32)`) instead of a point, and rewrite
+  `attach.rs`'s `mismatch_pointer` to map the `Attach(Restart | Quit)` target to its
+  `PromptOutcome` (D8). Contract tests: each leaf emits today's `Msg` for its target, and a
+  mismatch-prompt target maps to Restart or Quit. Verify: `make test PKG=mbv-gui` passes.
 - [ ] 10.5 Delete `window/layout/region_set.rs`, every region-set report, the hit-map path in
-  `core_thread/pointer.rs`, and the GUI's use of `HitMap`, `PointerGestureState`, and the
-  `QueueSurface` viewport. Remove `hover`, `drag`, and `scroll` from `GuiQueue`. Remove the input
+  `core_thread/pointer.rs`, `bridge/layout.rs`'s `hit_map`, the `HitMap` and
+  `PointerGestureState` fields of `attach.rs`, and the GUI's use of `HitMap`,
+  `PointerGestureState`, and the `QueueSurface` viewport. Remove `hover`, `drag`, and `scroll` from `GuiQueue`. Remove the input
   lines from invariant 38's failure list. Verify: `make test PKG=mbv-gui` passes and
   `rg -n 'region_set|RegionSet|HitMap|PointerGestureState' src` prints nothing.
 - [ ] 10.6 Verify that `mbv-surfaces` and the TUI did not change: `git diff --stat origin/main --

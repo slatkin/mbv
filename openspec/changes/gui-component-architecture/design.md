@@ -203,7 +203,8 @@ maps an intent for its lists to the command it runs today. The per-destination `
 
 The Library key map (`window/library/keys.rs`, `keys_shared.rs`, and the five `*_keys.rs` files)
 becomes one LIBRARY LIST key map. It turns a key over a pointer row into a `GuiListAct`, so no
-key file names a destination.
+key file names a destination. The pointer marker's list token is the `GuiListId` (D8), not a
+destination enum.
 
 ### D8. Dioxus Native is the only input system
 
@@ -220,7 +221,24 @@ test goes:
   behaviour does not move.
 - Popups stack by DOM order. A press on a menu entry reaches the entry, because Blitz hit-tests
   the topmost node. The overlay region ordering goes.
-- `pointer_target.rs` stays. It names the key target for the keyboard router.
+- `pointer_target.rs` stays as the mechanism that names the key target for the keyboard router,
+  but `PointerList` loses its destination variants (`Music`, `Home`, `Shows`, `Emby`,
+  `Audiobooks`, `Podcasts`, `Feeds`, `Tracklist`, `Workspace`). It becomes one `PointerList` that
+  carries a `GuiListId` token (the marker value is the id's string form). `PointerZone` stays.
+  The core resolves the id to the destination's meaning, as it does for every intent (D7).
+- The core-side pointer code goes with the hit map, in three places the first draft did not name:
+  - `leaves.rs` (`QueueLeaf`, `PlaybackLeaf`, `StatusBarLeaf`) keeps the per-target handling and
+    the `Msg`s it emits. It stops resolving a point. Each leaf takes the `RegionTarget` that a
+    `GuiPointerAct` carries. `row_slot_at`, `row_hover_at`, and `seekbar_region` go. A queue row
+    target already carries its `QueueSlotId`. The scrubber reports its seek fraction in the act
+    (`Seek(f32)` gesture), measured by the scrubber through the same measured-size report that
+    LIST BASE uses, so no core code reads a rectangle.
+  - `attach.rs` (the pre-attach campaign's mismatch prompt) drops its `HitMap` and
+    `PointerGestureState`. The DIALOG buttons of `attach_screen` send a `GuiPointerAct` whose
+    target is `RegionTarget::Attach(Restart | Quit)`, and `mismatch_pointer` maps that target to
+    the same `PromptOutcome` it maps today. A press on no target sends nothing.
+  - `bridge/layout.rs` loses `hit_map` and `LayoutRegion` reports. `RegionTarget` and the target
+    id enums stay.
 
 ### D9. One drag gesture
 
@@ -279,6 +297,8 @@ differently today, the difference becomes two values of one token, and the look 
 `window/library/`: `audiobooks*`, `emby*`, `feeds*`, `podcasts*`, `shows*`, `home*`, `episode`,
 `hero`, `lettered*`, `parts`, `row_memo`, and the per-destination parts of `state*` and `keys*`
 go. `list*`, `scroll`, `search`, `status`, and `reset` become generic over `GuiListId`.
+`window/sections.rs` replaces its `playlists` section with the neutral Library section of task 1.5
+(the Playlists tree is a `GuiListFrame`); the Playlists screen's open flag stays a plain section.
 
 ### D13. Tests
 
