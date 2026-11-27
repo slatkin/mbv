@@ -173,13 +173,13 @@ the destination accepts that asserts the resulting command.
   The build may stay red until task 6.4. Verify: `make checks PKG=mbv-gui` shows only errors at
   the old destination call sites.
 - [ ] 6.3 Replace `window/library/keys.rs`, `keys_shared.rs`, and the five `*_keys.rs` files with
-  one LIBRARY LIST key map that emits `GuiListAct` for the pointer row (D7). In
-  `window/pointer_target.rs`, replace the destination variants of `PointerList` with a
-  `GuiListId` token (D8). Contract test: one per key act. Verify: the new tests pass and
-  `rg -n 'Music|Shows|Emby|Audiobooks|Podcasts|Feeds' src/window/pointer_target.rs` prints nothing.
+  one LIBRARY LIST key map that emits `GuiListAct` for the pointer row (D7). The
+  `PointerList` destination variants stay until task 9.1, because the old painters of tasks
+  6.4, 7.x, and 8.3 still write them. Contract test: one per key act. Verify: the new tests
+  pass.
 - [ ] 6.4 Add FLAT (`list/library/flat.rs`) and mount it for Home, Emby (Favourites included),
   Audiobooks, Podcasts, Feeds, Search, and Shows New and Upcoming from the neutral section.
-  Delete `library_lettered_list`, `library_home_list`, `window/library/lettered*`,
+  Delete `library_lettered_list`, `library_home_list`, `library_favourites_list`, `window/library/lettered*`,
   `window/library/home*`, and the matching per-destination window files. Remove their lines from
   invariant 38's failure list. Verify: `make test PKG=mbv-gui` passes.
 
@@ -212,7 +212,7 @@ the destination accepts that asserts the resulting command.
   body paints its section header, an action press sends its `GuiHeroAct`. Verify: the new tests
   pass.
 - [ ] 8.3 Mount HERO BASE for every destination. Delete `library_hero`, `library_home_hero`,
-  `library_shows_hero`, `library_emby_hero`, `library_audiobooks_hero`,
+  `library_shows_hero`, `library_emby_hero`, `library_favourites_hero`, `library_audiobooks_hero`,
   `library_podcasts_hero`, `library_feeds_hero`, `library_workspace_table`,
   `library_tracklist`, `library_artist_tracklist`, and `window/library/*_workspace.rs` and
   `window/library/hero.rs`. Remove the Hero lines from invariant 38's failure list. Verify:
@@ -222,7 +222,9 @@ the destination accepts that asserts the resulting command.
 
 - [ ] 9.1 Make `library.rs` and `library/` (D1) the LIBRARY composite (BAR + LIST + HERO + BAR)
   that mounts one list and one Hero from the neutral section, with no match on the destination;
-  `library_panel.rs` moves into it. Verify: `rg -n 'GuiLibraryView::|Destination'
+  `library_panel.rs` moves into it. Now that no old painter writes a `PointerList` variant,
+  replace the destination variants of `PointerList` in `window/pointer_target.rs` with a
+  `GuiListId` token (D8). Verify: `rg -n 'PointerList::(Music|Home|Shows|Emby|Audiobooks|Podcasts|Feeds|Tracklist|Workspace)' src` and `rg -n 'Music|Shows|Emby|Audiobooks|Podcasts|Feeds' src/window/pointer_target.rs` print nothing, and `rg -n 'GuiLibraryView::|Destination'
   src/window/components/library.rs src/window/components/library` prints no destination match.
 - [ ] 9.2 Delete the per-destination frames in `src/bridge/frame/library/` and
   `src/bridge/frame/playlists.rs` that the neutral frames replace, and their sections
@@ -233,7 +235,7 @@ the destination accepts that asserts the resulting command.
   `make test PKG=mbv-gui` passes and `rg -n 'press_shows_row|toggle_library_node|play_library_track'
   src` prints nothing.
 - [ ] 9.4 Verify that the Library path is destination-free: `rg -n -i
-  'music|shows|emby|audiobook|podcast|feeds|playlist' src/window/components/library.rs
+  'music|shows|emby|favourite|audiobook|podcast|feeds|playlist' src/window/components/library.rs
   src/window/components/library src/window/components/list src/window/components/hero
   src/window/library src/window/pointer_target.rs src/bridge/frame --glob '!**/tests*'` prints
   only token names, icon names, and comments. Settings, Sessions, brand icons, and the Queue
@@ -246,7 +248,8 @@ the destination accepts that asserts the resulting command.
   progress ring, the now-playing and marked fills, `reorder`, and `active_row`. Contract tests:
   the drop sends the move act with the slot and the insertion point, the hover Play control
   replaces the duration. Verify: the new tests pass.
-- [ ] 10.2 Mount QUEUE in the Queue panel and the folded queue. The window reports the Queue's
+- [ ] 10.2 Mount QUEUE in the Queue panel and the folded queue. `GuiQueue.rows` becomes the full list and the core stops cropping rows to its viewport.
+  The window reports the Queue's
   rows in view, and the core uses that report for page keys and the wheel-follow rule. The
   build may stay red until task 10.4. Delete `queue_panel/row.rs`, `row_cells.rs`, and
   `geometry.rs`. Verify: `make checks PKG=mbv-gui` shows only errors at the region-set sites.

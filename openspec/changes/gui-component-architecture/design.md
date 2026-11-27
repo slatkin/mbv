@@ -277,12 +277,12 @@ differently today, the difference becomes two values of one token, and the look 
 | Current file(s) in `window/components/` | Target |
 | --- | --- |
 | `library_virtual_list`, `library_list_column`, `list_row` (+ `flat`, `tree`, `thumb`), `tree_row`, `tree_guide`, `cursor_reveal`, `library_letter_heading`, `library_letter_rail`, `library_list_notice`, `list_frame_notices`, `row_hover_actions` | LIST BASE or LIBRARY LIST internals |
-| `library_lettered_list`, `library_home_list` | FLAT |
+| `library_lettered_list`, `library_home_list`, `library_favourites_list` | FLAT |
 | `library_list`, `library_shows_list`, `playlists_panel` | TREE (painters go; Playlists screen becomes a composite) |
 | `queue_panel` (+ `row`, `row_cells`, `geometry`), `folded_queue` | QUEUE |
 | `library_workspace_table`, `library_tracklist`, `library_artist_tracklist` | WORKSPACE |
 | `library_hero_frame`, `library_hero_art`, `library_hero_cast`, `library_hero_detail`, `library_hero_fact_rows`, `library_hero_section`, `library_hero_pills` | HERO BASE internals |
-| `library_hero`, `library_home_hero`, `library_shows_hero`, `library_emby_hero`, `library_audiobooks_hero`, `library_podcasts_hero`, `library_feeds_hero` | deleted (data in `GuiHeroFrame`) |
+| `library_hero`, `library_home_hero`, `library_shows_hero`, `library_emby_hero`, `library_favourites_hero`, `library_audiobooks_hero`, `library_podcasts_hero`, `library_feeds_hero` | deleted (data in `GuiHeroFrame`) |
 | `header_icon_button`, `settings_button`, `settings_switch`, `checkbox_box`, `clear_field_button`, `library_hero_actions`, `prefix_badge`, `settings_state_pill`, `library_sort_control`, `queue_target_control`, `library_top_bar/tabs`, `settings_pick_button`, `track_chips` (chips) | CONTROL BASE |
 | `library_filter_field`, `library_search_control`, `settings_field`, the Playlists rename input | FIELD BASE |
 | `queue_row_menu`, `chooser_menu`, `queue_chooser_menu`, `library_dropdown`, `library_collection_dropdown`, `library_shows_view_dropdown`, `menu_card`, `track_chips` (popover) | POPUP / MENU |
