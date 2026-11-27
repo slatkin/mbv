@@ -141,6 +141,32 @@ A destination SHALL supply the row's data and the meaning of its acts, and SHALL
 - **WHEN** the Hero shows the Music artist page
 - **THEN** each album label paints as a heading row of the artist page's Workspace table, and a press on it changes nothing
 
+### Requirement: The panel changes state with its own size
+
+The panel SHALL pick one of four states from its own size, not from the window size: expanded, compact strip, expanded without queue, or rail. The `z` key SHALL toggle the collapse and the `q` key SHALL toggle the queue fold. The Client core SHALL hold the two toggles. The collapse SHALL apply only while the Library panel shows beside the panel: while the Queue column is the only column (the Mini view's Queue, or no Library content), the panel SHALL paint as if not collapsed and the footer line SHALL show no collapse control. The front end SHALL pick the layout from the measured size of the panel container, the same measurement that it reports to the Client core in `LayoutReport`, so the painted layout and the measured-size report follow one size.
+
+#### Scenario: The container is shorter than 520 px
+
+- **WHEN** the panel container is shorter than 520 px
+- **THEN** the panel shows the compact strip: a 96×54 still, the title, the parent line with the next item, play/pause, next, and a thin progress line
+
+#### Scenario: The queue is folded
+
+- **WHEN** the user presses `q` in the expanded panel
+- **THEN** the queue rows are replaced by one line with the remaining count, the queue finish clock, and a control that expands the queue
+
+#### Scenario: The panel is collapsed to the rail
+
+- **WHEN** the user presses `z`
+- **THEN** the panel shows the 72 px rail: a progress ring around the artwork, play/pause, next, the remaining time, and a control that expands the panel
+- **AND** pressing `z` again restores the previous state
+
+#### Scenario: A queue-only window does not collapse
+
+- **GIVEN** the Queue column is the only column in the window
+- **WHEN** the user opens the panel, or presses `z`
+- **THEN** the footer line shows no collapse control and the panel never shows the rail beside an empty window
+
 ### Requirement: Scrolling follows the cursor
 
 The queue SHALL keep the cursor row fully visible after every keyboard movement. The queue SHALL scroll as every GUI list scrolls, so a row at the viewport's edge can show in part.

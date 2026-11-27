@@ -84,6 +84,7 @@ None.
   - "Library lists and Workspace tables paint through shared parts" becomes the whole-GUI
     component requirement: one owner per shape, the levels, data-only bases, and destination-free
     window and bridge.
+  - "The panel changes state with its own size" drops the hit map from its closing clause.
   - "Scrolling follows the cursor" drops whole-row capacity and keeps the cursor-reveal rule.
   - "The Client core holds the player panel's interaction state" moves the Queue viewport, hover,
     and drag gesture out of the core, and replaces raw pointer forwarding with intents.

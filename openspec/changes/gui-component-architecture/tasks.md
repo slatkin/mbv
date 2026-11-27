@@ -6,7 +6,9 @@ after each Rust edit. Run `make checks PKG=mbv-gui` and `make test PKG=mbv-gui` 
 foreground and wait for them; never run them in the background, never sleep, never poll. A task
 may leave the build or tests red only when its text says so and names the task that turns them
 green. Add a test only where the task names its contract (`design.md` D13). Remove a
-per-destination painter test when its painter goes; do not port it. No test asserts a pixel
+per-destination painter test when its painter goes; do not port it. Before a task deletes a painter test, compare the painted structure the test
+guarded with the new base's output, and record in the commit message that the contract is
+covered. No test asserts a pixel
 position. Use no lint suppression and no `Element` prop on a base. Keep every file under 800
 lines. The look does not change: every look value goes through a token (`design.md` D10).
 Commit each task with a message that names the task number.
@@ -226,7 +228,7 @@ the destination accepts that asserts the resulting command.
   that mounts one list and one Hero from the neutral section, with no match on the destination;
   `library_panel.rs` moves into it. Now that no old painter writes a `PointerList` variant,
   replace the destination variants of `PointerList` in `window/pointer_target.rs` with a
-  `GuiListId` token (D8). Verify: `rg -n 'PointerList::(Music|Home|Shows|Emby|Audiobooks|Podcasts|Feeds|Tracklist|Workspace)' src` and `rg -n 'Music|Shows|Emby|Audiobooks|Podcasts|Feeds' src/window/pointer_target.rs` print nothing, and `rg -n 'GuiLibraryView::|Destination'
+  `GuiListId` token (D8). Verify: `rg -n 'PointerList::(Music|Home|Shows|Emby|Favourites|Audiobooks|Podcasts|Feeds|Tracklist|Workspace)' src` and `rg -n 'Music|Shows|Emby|Favourites|Audiobooks|Podcasts|Feeds' src/window/pointer_target.rs` print nothing, and `rg -n 'GuiLibraryView::|Destination'
   src/window/components/library.rs src/window/components/library` prints no destination match.
 - [ ] 9.2 Delete the per-destination frames in `src/bridge/frame/library/` and
   `src/bridge/frame/playlists.rs` that the neutral frames replace, and their sections

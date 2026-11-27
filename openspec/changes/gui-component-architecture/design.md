@@ -217,7 +217,7 @@ test goes:
   resolution, and the GUI's use of `HitMap` and `PointerGestureState` go. `mbv-surfaces` keeps
   them for the TUI.
 - `RegionTarget` and its target ids (`bridge/layout.rs`) stay as the vocabulary of a new
-  `GuiPointerAct { target: RegionTarget, gesture: Press | DoubleClick | Context | Wheel(f32) }`
+  `GuiPointerAct { target: RegionTarget, gesture: Press | DoubleClick | Context | Wheel(f32) | Seek(f32) }`
   intent. A component's handler sends the target it painted. The core runs the same per-target
   handling that the hit map reaches today. So the player panel's, Status bar's, and dialogs'
   behaviour does not move.
@@ -225,7 +225,7 @@ test goes:
   the topmost node. The overlay region ordering goes.
 - `pointer_target.rs` stays as the mechanism that names the key target for the keyboard router,
   but `PointerList` loses its destination variants (`Music`, `Home`, `Shows`, `Emby`,
-  `Audiobooks`, `Podcasts`, `Feeds`, `Tracklist`, `Workspace`). It becomes one `PointerList` that
+  `Favourites`, `Audiobooks`, `Podcasts`, `Feeds`, `Tracklist`, `Workspace`). It becomes one `PointerList` that
   carries a `GuiListId` token (the marker value is the id's string form). `PointerZone` stays.
   The core resolves the id to the destination's meaning, as it does for every intent (D7).
 - The core-side pointer code goes with the hit map, in three places the first draft did not name:
