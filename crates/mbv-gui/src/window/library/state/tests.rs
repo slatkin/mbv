@@ -319,7 +319,7 @@ fn a_reveal_scrolls_the_picked_album_row_into_view_once_the_list_is_measured() {
     // The album's row starts below the 40 px viewport (twenty closed artists
     // under the `A` heading sit above it), so the reveal scrolls it into
     // view: the album's bottom edge at the viewport's top.
-    assert_eq!(facts, ["top=1214 viewport=40"]);
+    assert_eq!(facts, ["top=1226 viewport=40"]);
     // The album's tracks are cached, so the reveal sends no open-album.
     assert_eq!(commands(&rx), []);
 }

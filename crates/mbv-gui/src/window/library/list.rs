@@ -42,6 +42,63 @@ pub const ARTIST_ROW_HEIGHT: f32 = LIBRARY_ROW_HEIGHT;
 pub const NODE_ROW_HEIGHT: f32 = 30.0;
 /// The canvas's track row height in logical pixels.
 pub const TRACK_ROW_HEIGHT: f32 = 28.0;
+/// The album (branch) row's height in logical pixels (gui-tree-row-roles
+/// design D3): the brief's 42 px branch row, shared by every tree's branch
+/// rows.
+pub const BRANCH_ROW_HEIGHT: f32 = 42.0;
+/// The gap a leaf well (gui-tree-row-roles design D3) leaves above its first
+/// row, in logical pixels: the well's top edge inset.
+pub const WELL_GAP_TOP_PX: f32 = 4.0;
+/// The gap a leaf well (gui-tree-row-roles design D3) leaves below its last
+/// row, in logical pixels: the well's bottom edge inset.
+pub const WELL_GAP_BOTTOM_PX: f32 = 6.0;
+
+/// A leaf row's place in its parent's leaf well (gui-tree-row-roles design
+/// D3): which well edge the row sits on. The edge decides the row's height,
+/// so the well's gaps are part of the row geometry the scroll and the reveal
+/// read, and the part knows where its rounded corners and separator go.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WellEdge {
+    /// A well of one row: the row is both edges, so it carries both gaps.
+    Only,
+    /// The well's first row: it carries the well's top gap.
+    First,
+    /// A row between the well's first and last rows: it carries no gap.
+    Middle,
+    /// The well's last row: it carries the well's bottom gap.
+    Last,
+}
+
+impl WellEdge {
+    /// The edge of the row at `index` of a well's `len` rows (design D3): a
+    /// one-row well is [`WellEdge::Only`], else the ends and the middle.
+    #[must_use]
+    pub fn of(index: usize, len: usize) -> Self {
+        if len <= 1 {
+            Self::Only
+        } else if index == 0 {
+            Self::First
+        } else if index == len - 1 {
+            Self::Last
+        } else {
+            Self::Middle
+        }
+    }
+
+    /// The row's height in logical pixels (design D3): [`TRACK_ROW_HEIGHT`]
+    /// plus the well gaps its edge carries — the top gap on [`WellEdge::Only`]
+    /// and [`WellEdge::First`], the bottom gap on [`WellEdge::Only`] and
+    /// [`WellEdge::Last`].
+    #[must_use]
+    pub fn height(self) -> f32 {
+        match self {
+            Self::Only => TRACK_ROW_HEIGHT + WELL_GAP_TOP_PX + WELL_GAP_BOTTOM_PX,
+            Self::First => TRACK_ROW_HEIGHT + WELL_GAP_TOP_PX,
+            Self::Middle => TRACK_ROW_HEIGHT,
+            Self::Last => TRACK_ROW_HEIGHT + WELL_GAP_BOTTOM_PX,
+        }
+    }
+}
 
 /// The letters the rail spans (design D7): A to Z, as the canvas paints it. A
 /// `#` heading for a Service's non-alphabetic names stays off the rail. The
@@ -118,6 +175,12 @@ pub enum LibraryRow {
         /// Whether the carried content holds the album's tracklist: an album
         /// without one asks the core to load it when it opens (design D5).
         tracks_loaded: bool,
+        /// The album's position among its artist's painted album rows, from 0
+        /// (gui-tree-row-roles design D4): the branch swatch reads it.
+        sibling: usize,
+        /// The branch row's facts line (gui-tree-row-roles design D5); empty
+        /// paints none.
+        facts: String,
     },
     /// A track row under an open album.
     Track {
@@ -134,6 +197,9 @@ pub enum LibraryRow {
         number: i64,
         /// The runtime, `M:SS` or `H:MM:SS`; empty when unknown.
         duration: String,
+        /// The row's place in its album's leaf well (gui-tree-row-roles
+        /// design D3): its edge and its height.
+        well: WellEdge,
     },
 }
 
@@ -387,6 +453,25 @@ fn push_letter_and_artist(
     builder.artist_open = artist_open;
 }
 
+/// A branch row's facts line (gui-tree-row-roles design D5): the album's
+/// year; an open album whose frame carries its loaded total adds
+/// `N tracks · total` after it, skipping an empty year. An empty year and no
+/// total paint an empty line, and none.
+fn album_facts(album: &GuiMusicAlbumFrame, open: bool) -> String {
+    let year = album.year.trim();
+    let Some(total) = album.total.as_ref().filter(|_| open) else {
+        return year.to_owned();
+    };
+    let count = match total.count {
+        1 => "1 track".to_owned(),
+        _ => format!("{} tracks", total.count),
+    };
+    match year {
+        "" => format!("{count} · {}", total.duration),
+        year => format!("{year} · {count} · {}", total.duration),
+    }
+}
+
 /// Push the artist's painted albums and, where an album paints open, its
 /// tracks (design D7).
 fn push_albums(
@@ -399,6 +484,7 @@ fn push_albums(
     let Some(letter) = letter else {
         return;
     };
+    let mut sibling = 0;
     for (album, tracks, kept) in albums {
         if !kept {
             continue;
@@ -423,13 +509,17 @@ fn push_albums(
                 open: album_open,
                 shows_children: album_open && !tracks.is_empty(),
                 tracks_loaded: album.tracks.is_some(),
+                sibling,
+                facts: album_facts(album, album_open),
             },
-            NODE_ROW_HEIGHT,
+            BRANCH_ROW_HEIGHT,
         );
+        sibling += 1;
         if !album_open {
             continue;
         }
-        for track in tracks {
+        for (index, track) in tracks.iter().enumerate() {
+            let well = WellEdge::of(index, tracks.len());
             builder.push(
                 LibraryRow::Track {
                     base: RowBase {
@@ -443,8 +533,9 @@ fn push_albums(
                     name: track.name.clone(),
                     number: track.number,
                     duration: track.duration.clone(),
+                    well,
                 },
-                TRACK_ROW_HEIGHT,
+                well.height(),
             );
         }
     }

@@ -25,7 +25,10 @@ pub mod flat;
 pub mod thumb;
 pub mod tree;
 
-pub use crate::window::library::list::{LIBRARY_ROW_HEIGHT, NODE_ROW_HEIGHT, TRACK_ROW_HEIGHT};
+pub use crate::window::library::list::{
+    BRANCH_ROW_HEIGHT, LIBRARY_ROW_HEIGHT, NODE_ROW_HEIGHT, TRACK_ROW_HEIGHT, WELL_GAP_BOTTOM_PX,
+    WELL_GAP_TOP_PX, WellEdge,
+};
 pub use flat::FlatRow;
 pub use thumb::{LibraryRowThumb, paint_thumb};
 pub use tree::{TreeDepth, TreeLevel, TreeRow, TreeTrail};

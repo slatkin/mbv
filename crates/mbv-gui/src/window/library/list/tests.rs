@@ -6,7 +6,10 @@
 //! is plain data over fixed row heights, so the geometry is asserted without
 //! a layout.
 
+use rstest::rstest;
+
 use super::*;
+use crate::bridge::frame::library::GuiMusicTrackTotalFrame;
 
 /// The track Brand Nubian's album holds.
 fn all_for_one() -> GuiMusicTrackFrame {
@@ -169,12 +172,140 @@ fn the_canvas_tree_paints_letter_headings_and_the_canvas_row_heights() {
     let heights: Vec<f32> = painted.iter().map(|row| row.base().height).collect();
     assert_eq!(
         heights,
-        [24.0, 56.0, 24.0, 56.0, 30.0, 28.0, 28.0, 30.0, 56.0]
+        [
+            24.0,
+            56.0,
+            24.0,
+            56.0, // the heading, the artist, the heading, the artist
+            BRANCH_ROW_HEIGHT,
+            32.0,
+            34.0, // the open album, its first and last track
+            BRANCH_ROW_HEIGHT,
+            56.0, // the closed album, the closed artist
+        ]
     );
     let tops: Vec<f32> = painted.iter().map(|row| row.base().top).collect();
     assert_eq!(
         tops,
-        [0.0, 24.0, 80.0, 104.0, 160.0, 190.0, 218.0, 246.0, 276.0]
+        [0.0, 24.0, 80.0, 104.0, 160.0, 202.0, 234.0, 268.0, 310.0]
+    );
+}
+
+/// Contract (gui-tree-row-roles design D10): an album row's sibling counts
+/// its artist's painted album rows from 0 and restarts under the next open
+/// artist, so two adjacent branch rows never share a swatch.
+#[test]
+fn an_album_rows_sibling_counts_from_zero_under_each_open_artist() {
+    let painted = build_library_rows(LibraryTree {
+        artists: &[beastie(), brand()],
+        open: &[
+            "artist:service:a1".to_owned(),
+            "artist:service:a2".to_owned(),
+        ],
+        closed: &[],
+        filter: "",
+    });
+    let siblings: Vec<usize> = painted
+        .iter()
+        .filter_map(|row| match row {
+            LibraryRow::Album { sibling, .. } => Some(*sibling),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        siblings,
+        [0, 1, 0],
+        "the count runs over one artist's painted albums and restarts under the next"
+    );
+}
+
+/// A Beastie Boys artist whose first album holds `count` cached tracks, with
+/// a matching count and total time on the frame.
+fn beastie_with_tracklist(count: usize) -> GuiMusicArtistFrame {
+    let tracks: Vec<GuiMusicTrackFrame> = (1..=count)
+        .map(|n| GuiMusicTrackFrame {
+            track_id: format!("t{n}"),
+            name: format!("Track {n}"),
+            number: i64::try_from(n + 1).unwrap_or_default(),
+            duration: "3:00".to_owned(),
+        })
+        .collect();
+    let mut beastie = beastie();
+    beastie.albums[0].tracks = Some(tracks);
+    beastie.albums[0].total = Some(GuiMusicTrackTotalFrame {
+        count,
+        duration: "3:00".to_owned(),
+    });
+    beastie
+}
+
+/// The painted rows with that album and its artist open.
+fn open_album_rows(count: usize) -> Vec<LibraryRow> {
+    build_library_rows(LibraryTree {
+        artists: &[beastie_with_tracklist(count)],
+        open: &["artist:service:a1".to_owned(), "album:al1".to_owned()],
+        closed: &[],
+        filter: "",
+    })
+}
+
+/// The painted rows' `(top, height)` pairs for the track rows.
+fn track_geometry(painted: &[LibraryRow]) -> Vec<(f32, f32)> {
+    painted
+        .iter()
+        .filter_map(|row| match row {
+            LibraryRow::Track { base, well, .. } => Some((base.top, well.height())),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The album row's top edge: the first track's well starts at it plus the
+/// branch row's height.
+fn album_top(painted: &[LibraryRow]) -> f32 {
+    painted
+        .iter()
+        .find_map(|row| match row {
+            LibraryRow::Album { base, .. } => Some(base.top),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+/// The track tops a well paints (gui-tree-row-roles design D3): the album's
+/// bottom edge, then each row's `WellEdge` height added on.
+fn well_tops(album_top: f32, heights: &[f32]) -> Vec<f32> {
+    let mut tops = Vec::with_capacity(heights.len());
+    let mut top = album_top + BRANCH_ROW_HEIGHT;
+    for height in heights {
+        tops.push(top);
+        top += height;
+    }
+    tops
+}
+
+/// Contract (gui-tree-row-roles design D10): an open album's track rows sit
+/// at the `WellEdge` heights — the well's top gap on the first row, its bottom
+/// gap on the last, and both gaps on a one-row well.
+#[rstest]
+#[case::one_track(1, &[38.0])]
+#[case::two_tracks(2, &[32.0, 34.0])]
+#[case::three_tracks(3, &[32.0, 28.0, 34.0])]
+fn an_open_albums_track_tops_follow_the_well_edge_heights(
+    #[case] count: usize,
+    #[case] heights: &[f32],
+) {
+    let painted = open_album_rows(count);
+    let tracks = track_geometry(&painted);
+    assert_eq!(
+        tracks.iter().map(|(_, height)| *height).collect::<Vec<_>>(),
+        heights,
+        "each track row carries its edge's well gaps"
+    );
+    assert_eq!(
+        tracks.iter().map(|(top, _)| *top).collect::<Vec<_>>(),
+        well_tops(album_top(&painted), heights),
+        "the track tops accumulate the WellEdge heights from the album's bottom edge"
     );
 }
 
@@ -224,7 +355,7 @@ fn the_window_paints_only_the_rows_in_view() {
 fn the_scroll_offset_that_shows_a_cursor_below_the_viewport_puts_its_bottom_edge_there() {
     assert_eq!(
         scroll_top_to_show_cursor(&rows(), Some("artist:service:a2"), 0.0, 60.0),
-        272.0
+        306.0
     );
 }
 
@@ -257,7 +388,7 @@ fn a_narrowed_viewport_scrolls_the_selected_row_back_into_view() {
             view_at(0.0, 400.0),
             60.0
         ),
-        272.0
+        306.0
     );
 }
 
@@ -321,12 +452,12 @@ fn the_page_step_moves_by_the_viewport_height() {
 #[test]
 fn home_and_end_go_to_the_lists_ends() {
     assert_eq!(scroll_step(&rows(), view(100.0), ListMove::Home), 0.0);
-    assert_eq!(scroll_step(&rows(), view(0.0), ListMove::End), 272.0);
+    assert_eq!(scroll_step(&rows(), view(0.0), ListMove::End), 306.0);
 }
 
 // The step stays inside the list's scrollable range.
 #[test]
 fn the_step_stays_inside_the_lists_scrollable_range() {
     assert_eq!(scroll_step(&rows(), view(0.0), ListMove::Up), 0.0);
-    assert_eq!(scroll_step(&rows(), view(272.0), ListMove::Down), 272.0);
+    assert_eq!(scroll_step(&rows(), view(306.0), ListMove::Down), 306.0);
 }
