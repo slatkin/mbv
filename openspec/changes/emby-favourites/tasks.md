@@ -101,9 +101,9 @@ Tests are the implementer's choice under `docs/invariants/14-test-ownership.md`;
 
 ## 6. Gates
 
-- [ ] 6.1 Run `make format`, `make checks`, and `make test` in the foreground; fix every red gate
+- [x] 6.1 Run `make format`, `make checks`, and `make test` in the foreground; fix every red gate
   whoever introduced it. Verify: all three exit 0.
-- [ ] 6.2 Run `make check-code-file-lines` and split any file over 800 lines along its
+- [x] 6.2 Run `make check-code-file-lines` and split any file over 800 lines along its
   responsibility seam. Verify: exit 0.
 
 ## Workflow follow-up
