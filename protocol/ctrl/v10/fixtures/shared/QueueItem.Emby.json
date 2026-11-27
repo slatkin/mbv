@@ -21,6 +21,7 @@
     "thumb": ""
   },
   "index_number": 1,
+  "is_favorite": false,
   "is_folder": false,
   "item_type": "Episode",
   "kind": "Emby",
