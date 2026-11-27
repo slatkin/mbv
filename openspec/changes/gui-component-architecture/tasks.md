@@ -17,12 +17,18 @@ Commit each task with a message that names the task number.
 
 - [ ] 1.1 In `src/bridge/frame/list.rs` (new), add `GuiListId`, `GuiRowKey`, `GuiRowRole`
   (`Root`, `Branch`, `Leaf`, `Heading`, `Field`), `GuiRowCellsFrame`, `GuiRowActionsFrame`, and
-  `GuiListRowFrame` as `design.md` D6 states, with rows behind `Arc<[_]>`. Verify:
-  `make checks PKG=mbv-gui` passes.
+  `GuiListRowFrame` as `design.md` D6 states, with rows behind `Arc<[_]>`. Also move the shared
+  types that survive task 9.2 out of the files it deletes: `GuiHomeRowStateFrame` (from
+  `frame/library/home.rs`; `play_mark.rs` uses it) into `frame/list.rs`, and update every
+  importer. Leave no re-export. Verify: `make checks PKG=mbv-gui` passes.
 - [ ] 1.2 In the same module, add `GuiListFrame`, `GuiListHeaderFrame`, `GuiChoiceFrame`,
   `GuiLettersFrame`, and `GuiListNoticeFrame` (D6). Verify: `make checks PKG=mbv-gui` passes.
 - [ ] 1.3 In `src/bridge/frame/hero.rs` (new), add `GuiHeroFrame`, `GuiHeroActionFrame`, `GuiHeroFavouriteFrame`, and
-  `GuiHeroBodyFrame::{None, Workspace(GuiListFrame)}` (D5). Verify: `make checks PKG=mbv-gui`
+  `GuiHeroBodyFrame::{None, Workspace(GuiListFrame)}` (D5). Also move `GuiHeroFactsFrame`,
+  `GuiHeroPillFrame`, `GuiHeroFactRowFrame`, `GuiHeroFactLabelFrame`, `GuiHeroCastMemberFrame`
+  (from `frame/library/hero_facts.rs`) into `frame/hero.rs`, and `GuiMetaSegmentFrame` and
+  `GuiMetaKindFrame` (from `frame/library/meta.rs`; `typed_text.rs` uses them) into
+  `frame/list.rs`, updating every importer with no re-export. Verify: `make checks PKG=mbv-gui`
   passes.
 - [ ] 1.4 In `src/bridge/intent.rs` (new), add `GuiListIntent`, `GuiListAct`,
   `GuiListHeaderAct`, `GuiHeroIntent`, `GuiHeroAct` (with `SetFavourite(bool)`), and `GuiPointerAct` over the existing
@@ -172,20 +178,26 @@ the destination accepts that asserts the resulting command.
   headings and A-Z rail from `library_letter_heading` and `library_letter_rail`). Contract
   tests: letters paint under a name sort only, a rail press scrolls to the letter. Verify: the
   new tests pass.
-- [ ] 6.2 Replace `window/library/state.rs` and its per-destination parts with one `ListStates`
-  map keyed by `GuiListId` (scroll, hover, open nodes, filter text, rename draft) (D11).
-  The build may stay red until task 6.4. Verify: `make checks PKG=mbv-gui` shows only errors at
-  the old destination call sites.
-- [ ] 6.3 Replace `window/library/keys.rs`, `keys_shared.rs`, and the five `*_keys.rs` files with
-  one LIBRARY LIST key map that emits `GuiListAct` for the pointer row (D7). The
-  `PointerList` destination variants stay until task 9.1, because the old painters of tasks
-  6.4, 7.x, and 8.3 still write them. Contract test: one per key act. Verify: the new tests
-  pass.
+- [ ] 6.2 Add one `ListStates` map keyed by `GuiListId` (scroll, hover, open nodes, filter text,
+  rename draft) beside the old per-destination state (D11). Delete nothing: the old Music, Shows,
+  Playlists, and Hero painters of tasks 7 and 8 still read the old state, so the build stays
+  green. Each mounting task below deletes the old state files of its destinations, and task 8.3
+  deletes `window/library/state.rs`, `list_state.rs`, and `search*` leftovers. Verify:
+  `make test PKG=mbv-gui` passes.
+- [ ] 6.3 Add one LIBRARY LIST key map beside the old key files. It emits `GuiListAct` for the
+  pointer row (D7). Add `PointerList::Neutral(GuiListId)` to `window/pointer_target.rs`, which
+  the new components write. The old key files (`keys.rs`, `keys_shared.rs`, the five
+  `*_keys.rs`) keep serving the old `PointerList` destination variants, which stay until task
+  9.1 because the old painters of tasks 7 and 8.3 still write them. Each mounting task deletes
+  the old key file of its destination, and task 8.3 deletes `keys.rs` and `keys_shared.rs`.
+  Contract test: one per key act. Verify: the new tests pass.
 - [ ] 6.4 Add FLAT (`list/library/flat.rs`) and mount it for Home, Emby (Favourites included),
   Audiobooks, Podcasts, Feeds, Search, and Shows New and Upcoming from the neutral section.
-  Delete `library_lettered_list`, `library_home_list`, `library_favourites_list`, `window/library/lettered*`,
-  `window/library/home*`, and the matching per-destination window files. Remove their lines from
-  invariant 38's failure list. Verify: `make test PKG=mbv-gui` passes.
+  Delete `library_lettered_list`, `library_home_list`, `library_favourites_list`,
+  `window/library/lettered*`, `window/library/home*`, the `*_keys.rs`, `*_list*`, and state
+  files of those destinations, and the matching per-destination window files. Keep what a
+  surviving Hero or Workspace painter still reads (`*_workspace*`, `hero*`) until task 8.3.
+  Remove their lines from invariant 38's failure list. Verify: `make test PKG=mbv-gui` passes.
 
 ## 7. TREE
 
@@ -194,14 +206,14 @@ the destination accepts that asserts the resulting command.
   BASE. Contract tests: a toggle opens and sends `Toggle`, Collapse all closes every level, the
   `Field` row commits `Rename`. Verify: the new tests pass.
 - [ ] 7.2 Mount TREE for Music. Delete `library_list.rs` and the Music parts of
-  `window/library/`. Verify: `make test PKG=mbv-gui` passes.
+  `window/library/` (state, keys, list). Verify: `make test PKG=mbv-gui` passes.
 - [ ] 7.3 Mount TREE for the Shows All view. Delete `library_shows_list.rs`,
-  `window/library/shows*`, and `window/library/episode.rs`. Verify: `make test PKG=mbv-gui`
+  `window/library/shows*` except `shows_workspace*` (task 8.3), and `window/library/episode.rs`; delete `shows_keys.rs` and the Shows state. Verify: `make test PKG=mbv-gui`
   passes.
 - [ ] 7.4 Mount TREE for Playlists inside a Playlists screen composite (PANEL + BAR + TREE).
   Delete `playlists_panel.rs` and its directory. Remove the three tree lines from invariant 38's
   failure list. Verify: `make test PKG=mbv-gui` passes and `rg -n 'TreeRow|FlatRow'
-  src/window --glob '!**/list/**'` prints nothing.
+  src/window --glob '!**/list/**' --glob '!**/tests*'` prints nothing.
 
 ## 8. WORKSPACE and HERO BASE
 
@@ -219,7 +231,8 @@ the destination accepts that asserts the resulting command.
   `library_shows_hero`, `library_hero_heart`, `library_emby_hero`, `library_favourites_hero`, `library_audiobooks_hero`,
   `library_podcasts_hero`, `library_feeds_hero`, `library_workspace_table`,
   `library_tracklist`, `library_artist_tracklist`, and `window/library/*_workspace.rs` and
-  `window/library/hero.rs`. Remove the Hero lines from invariant 38's failure list. Verify:
+  `window/library/hero.rs`, then the last old state and key files: `window/library/state*`,
+  `list_state.rs`, `keys.rs`, and `keys_shared.rs`. Remove the Hero lines from invariant 38's failure list. Verify:
   `make test PKG=mbv-gui` passes.
 
 ## 9. LIBRARY composite and the neutral cut-over
@@ -227,13 +240,15 @@ the destination accepts that asserts the resulting command.
 - [ ] 9.1 Make `library.rs` and `library/` (D1) the LIBRARY composite (BAR + LIST + HERO + BAR)
   that mounts one list and one Hero from the neutral section, with no match on the destination;
   `library_panel.rs` moves into it. Now that no old painter writes a `PointerList` variant,
-  replace the destination variants of `PointerList` in `window/pointer_target.rs` with a
-  `GuiListId` token (D8). Verify: `rg -n 'PointerList::(Music|Home|Shows|Emby|Favourites|Audiobooks|Podcasts|Feeds|Tracklist|Workspace)' src` and `rg -n 'Music|Shows|Emby|Favourites|Audiobooks|Podcasts|Feeds' src/window/pointer_target.rs` print nothing, and `rg -n 'GuiLibraryView::|Destination'
+  remove the destination variants of `PointerList` in `window/pointer_target.rs`, so that
+  `Neutral(GuiListId)` (task 6.3) is its only list form (D8). Verify: `rg -n 'PointerList::(Music|Home|Shows|Emby|Favourites|Audiobooks|Podcasts|Feeds|Tracklist|Workspace)' src` and `rg -n 'Music|Shows|Emby|Favourites|Audiobooks|Podcasts|Feeds' src/window/pointer_target.rs` print nothing, and `rg -n 'GuiLibraryView::|Destination'
   src/window/components/library.rs src/window/components/library` prints no destination match.
 - [ ] 9.2 Delete the per-destination frames in `src/bridge/frame/library/` and
   `src/bridge/frame/playlists.rs` that the neutral frames replace, and their sections
-  (`window/sections.rs` `playlists` included). Verify:
-  `make test PKG=mbv-gui` passes.
+  (`window/sections.rs` `playlists` included, and the matching `src/sections.rs`,
+  `src/sections/library.rs`, and `src/bridge/sections.rs` entries). Keep `GuiArtistKey` only if a
+  surviving command uses it. Verify: `make test PKG=mbv-gui` passes and `rg -n
+  'frame::library::(home|meta|hero_facts)' src` prints nothing.
 - [ ] 9.3 Reduce `GuiLibraryCommand` and `GuiPlaylistsCommand` to the acts that are not list or
   Hero acts (D7), and delete the window functions that built the removed variants. Verify:
   `make test PKG=mbv-gui` passes and `rg -n 'press_shows_row|toggle_library_node|play_library_track'
