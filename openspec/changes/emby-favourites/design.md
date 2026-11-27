@@ -64,7 +64,7 @@ the raw payload, and every mbv list fetch already asks for it.
 
 **D2. Entry and action parallel to played state.** Two `ContextAction` variants, `Favourite(id)`
 and `Unfavourite(id)`, labelled "Add to Favourites" / "Remove from Favourites". The entry is pushed
-in the shared builder after the played-state entry (after Add to Queue when the item has no
+in the shared builder after the played-state entry (after Enqueue when the item has no
 played-state entry, as Music has none), in both the folder and the leaf paths, and only for a
 single row whose item `supports_favourite()`. The builder's `Queue` focus path does not push it
 (the Owner holds queue items; a flipped flag would go stale and no ctrl variant is added). The TUI
@@ -146,7 +146,7 @@ pressing All restores them (spec "A Favourites view replaces the destination's l
 
 **D8. Music artists are listed by item id; the grouped tree offers no artist entry.** Favourite
 artist rows come from the `/Artists` listing and carry their artist item id, which is in the album
-payload's id space. A favourite MusicArtist row's Play All, Shuffle, and Add to Queue, from its row
+payload's id space. A favourite MusicArtist row's Play All, Shuffle, and Enqueue, from its row
 controls and from its menu, fetch the artist's tracks with `get_artist_audio_tracks` (`ArtistIds`)
 and play, shuffle, or append them in album, disc, and track order. The fetch is synchronous, as
 `play_folder_gated` is. The GUI routes them: `run_library_menu_entry` catches `PlayFolder`,

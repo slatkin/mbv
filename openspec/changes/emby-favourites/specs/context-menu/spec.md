@@ -4,33 +4,33 @@
 
 ### Requirement: Library lists share one standard action set
 Every library list row menu SHALL use the standard set in this order. A leaf
-row offers Play, Add to Queue, then one played-state entry. A collection row
-offers Play All, Shuffle, Add to Queue, then one played-state entry. An Emby
+row offers Play, Enqueue, then one played-state entry. A collection row
+offers Play All, Shuffle, Enqueue, then one played-state entry. An Emby
 row whose item supports favourites (capability `emby-favourites`) adds one
-favourites entry after the played-state entry, or after Add to Queue when the
+favourites entry after the played-state entry, or after Enqueue when the
 row has no played-state entry. A multi-selection offers Play, Shuffle, Add to
 Queue, Mark Played, then Mark Unplayed, and no favourites entry. Entries a
 documented exception removes SHALL be left out without reordering the rest.
 
 #### Scenario: Movie leaf
 - **WHEN** the user opens the context menu on an unplayed movie that is not a favourite
-- **THEN** the menu offers Play, Add to Queue, Mark Played, Add to Favourites, in that order
+- **THEN** the menu offers Play, Enqueue, Mark Played, Add to Favourites, in that order
 
 #### Scenario: TV season collection
 - **WHEN** the user opens the context menu on a TV season with unplayed episodes
-- **THEN** the menu offers Play All, Shuffle, Add to Queue, Mark Played, in that order
+- **THEN** the menu offers Play All, Shuffle, Enqueue, Mark Played, in that order
 
 #### Scenario: TV series collection
 - **WHEN** the user opens the context menu on a TV series that is not a favourite and has unplayed episodes
-- **THEN** the menu offers Play All, Shuffle, Add to Queue, Mark Played, Add to Favourites, in that order
+- **THEN** the menu offers Play All, Shuffle, Enqueue, Mark Played, Add to Favourites, in that order
 
 #### Scenario: Audiobookshelf podcast episode leaf
 - **WHEN** the user opens the context menu on an unfinished Audiobookshelf podcast episode
-- **THEN** the menu offers Play, Add to Queue, Mark Played, in that order
+- **THEN** the menu offers Play, Enqueue, Mark Played, in that order
 
 #### Scenario: Feeds multi-selection
 - **WHEN** three Feeds entries are selected and the user opens the context menu
-- **THEN** the menu offers Play, Shuffle, Add to Queue, Mark Played, Mark Unplayed, in that order
+- **THEN** the menu offers Play, Shuffle, Enqueue, Mark Played, Mark Unplayed, in that order
 
 
 ### Requirement: Music rows offer no played-state entry
@@ -42,7 +42,7 @@ visible effect. This rule does not remove the favourites entry
 
 #### Scenario: Album menu
 - **WHEN** the user opens the context menu on a music album
-- **THEN** the menu offers Play All, Shuffle, Add to Queue, Add to Favourites, and no played-state entry
+- **THEN** the menu offers Play All, Shuffle, Enqueue, Add to Favourites, and no played-state entry
 
 #### Scenario: Mixed multi-selection with a track
 - **WHEN** a multi-selection holds a movie and a music track
@@ -55,7 +55,7 @@ Watching, and a removable multi-selection SHALL add Remove.
 
 #### Scenario: Continue Watching row
 - **WHEN** the user opens the context menu on an unplayed Continue Watching row
-- **THEN** the menu offers Play, Add to Queue, Mark Played, Add to Favourites, then Remove from Continue Watching
+- **THEN** the menu offers Play, Enqueue, Mark Played, Add to Favourites, then Remove from Continue Watching
 
 #### Scenario: Continue Watching multi-selection
 - **WHEN** two Continue Watching rows are selected and the user opens the context menu

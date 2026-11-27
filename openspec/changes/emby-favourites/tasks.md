@@ -30,7 +30,7 @@ Tests are the implementer's choice under `docs/invariants/14-test-ownership.md`;
   `push_favourite_context_action` called after the played-state entry in both
   `push_folder_context_actions` and `push_leaf_context_actions`, single row only, only when
   `item.supports_favourite()`, and never on the Queue-focus path (design D2). Labels "Add to
-  Favourites" / "Remove from Favourites"; a music track's entry follows Add to Queue, because
+  Favourites" / "Remove from Favourites"; a music track's entry follows Enqueue, because
   music has no played-state entry.
 - [ ] 2.3 Execute the actions in `.../context_menu/actions.rs`: `context_set_favourite` calls
   `set_favourite`, then runs the design D4 flip over every App-held copy (new helper in
@@ -80,7 +80,7 @@ Tests are the implementer's choice under `docs/invariants/14-test-ownership.md`;
   and enqueue paths, and select into the Favourites Hero of design D6, not the plain-library Hero
   producer, whose `hero_item` gate paints no Hero for a folder or a non-`Movie`. The favourites
   store resolves an id only while that library's active view is Favourites. Route a favourite
-  MusicArtist row's Play All, Shuffle, and Add to Queue (row controls and menu entries) through
+  MusicArtist row's Play All, Shuffle, and Enqueue (row controls and menu entries) through
   the design D8 artist path, and update the `get_artist_audio_tracks` doc comment.
 - [ ] 4.4 After a favourite change succeeds, flip the flag in the GUI stores by id and, when the
   active view is Favourites, refetch it so an unfavourited row leaves (design D4).
