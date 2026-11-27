@@ -38,8 +38,9 @@ one that is.
 ### Requirement: The favourites entry is single-row and library-scoped
 
 The favourites entry SHALL NOT appear in a multi-selection menu, on a Queue row, or on an
-Audiobookshelf or Feeds row. A Music artist row that names an artist by name only, with no Emby
-artist item id, SHALL NOT offer it.
+Audiobookshelf or Feeds row. A Music tree artist row SHALL NOT offer it, whether the row is keyed
+by an Emby artist item id or by name only: the tree's artist rows are groupings of the library's
+albums, not rows of a held artist item.
 
 #### Scenario: Queue row
 
@@ -49,6 +50,17 @@ artist item id, SHALL NOT offer it.
 #### Scenario: Multi-selection
 
 - **WHEN** two Emby movies are selected and the user opens the menu
+- **THEN** the menu offers no favourites entry
+
+#### Scenario: Music artist row
+
+- **WHEN** the user opens the menu on a Music tree artist row
+- **THEN** the menu offers no favourites entry
+
+#### Scenario: Music artist row after Favourites was opened
+
+- **GIVEN** an artist is a favourite and the Favourites view was opened earlier
+- **WHEN** the user returns to All and opens the menu on that artist's tree row
 - **THEN** the menu offers no favourites entry
 
 ### Requirement: Choosing the entry changes the Emby favourite state
@@ -110,6 +122,11 @@ show on the next opening of the view.
 - **WHEN** the user then opens the library's Favourites view
 - **THEN** the list shows the movie
 
+#### Scenario: Refresh
+
+- **WHEN** the user presses refresh in a Favourites view
+- **THEN** the favourites list is fetched again
+
 ### Requirement: A Favourites row acts as the library's own row
 
 A Favourites row SHALL select into the Hero, play, enqueue, and open the item menu as the same item
@@ -125,6 +142,11 @@ does.
 
 - **WHEN** the user chooses Play All on a favourite series row
 - **THEN** the series' episodes play as Play All on that series does in the All view
+
+#### Scenario: Favourite artist plays
+
+- **WHEN** the user chooses Play All on a favourite artist row
+- **THEN** the artist's tracks play in album, disc, and track order
 
 ### Requirement: There is no cross-library favourites section
 

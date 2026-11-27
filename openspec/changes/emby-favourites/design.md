@@ -81,9 +81,12 @@ the official client sends and what the user's server is known to serve; mbv uses
 `PlayedItems`, a different resource.
 
 **D4. After a success, flip the flag in every held copy by id, then refresh what is open.** A helper
-in client-core sets `is_favorite` on matching `EmbyItem`s in the TUI levels and Home content; a
-helper in the GUI core does the same for the GUI stores (plain-library root lists, Shows New, Shows
-tree, Music tree rows, the favourites store). If the open GUI view is Favourites, its list is
+in client-core sets `is_favorite` on matching `EmbyItem`s in every App-held copy: the TUI levels,
+Home content, the series details the Shows tree reads (`series_detail_item`), the album track cache
+(`album_tracks_cache`), and the artist detail cache. A helper in the GUI core does the same for the
+GUI's own stores: the plain-library root lists, Shows New, the Music album store, and the
+favourites store. The GUI cannot write App fields (shared-core rule 2), so App-held copies flip
+only through the core helper. If the open GUI view is Favourites, its list is
 fetched again so an unfavourite removes the row. Queue items are not touched (D2). *Alternative:*
 refetch every list. Rejected: refetching a large library list for one flag is wasteful and
 would reset the list's scroll and selection.
@@ -97,7 +100,15 @@ becomes `LibraryViewDropdown`, still a thin supplier of rows to `LibraryDropdown
 The launch state keeps `GuiLaunchShowsView` unchanged; saving maps Favourites to All, and only
 Shows persists. *Alternative:* add `Favourites` to the Shows type and give Movies and Music their
 own sibling type and dropdown. Rejected: it copies the same shape three times, which invariant 38
-forbids.
+forbids. A Music or feed-group Emby header already paints a collection dropdown; it paints the view
+dropdown beside it (the header's `collections` and `view` branches stop being exclusive). While the
+view is Favourites the collection dropdown is hidden, because Favourites lists the whole library
+and a collection pick does not filter it; pressing All paints it again with its pick intact.
+The title line order is: Service mark, refresh, Expand all / Collapse all (Music All and Shows All
+only), the collection dropdown (Music and feed-group, All view only), the view dropdown, then the
+sort control (where the view paints one). The Favourites view paints no sort control, no letter
+headings or rail, no tree buttons, and no collection dropdown. The refresh button in the
+Favourites view refetches the favourites list.
 
 **D6. One Favourites list, fetched per library, painted by one component.** The GUI core holds a
 favourites store keyed by library id, holding the same request state type the New store uses
@@ -114,11 +125,17 @@ Season), orders collections first (types that are folders) then media items, eac
 ascending with the existing Title sort key. No sort control is painted. The list's frame part
 reuses `GuiEmbyRowFrame` (the rows the plain-library list already paints) and is carried as an
 optional part on each of the Shows, Music, and plain-library list parts; a new
-`LibraryFavouritesList` component paints it, using the shared flat-row parts. The selected favourite
-resolves through the plain-library Hero producer, which already builds a Hero for any `EmbyItem`.
+`LibraryFavouritesList` component paints it, using the shared flat-row parts. Every Favourites row
+paints one Hero, built as the Home Hero builds an Emby item's: `hero_content_emby`,
+`hero_facts_emby`, the declared artwork, and the cast, with no `hero_item` gate. A Series, BoxSet,
+album, or artist favourite therefore paints a Hero, though the plain-library gate excludes folders
+and non-Movies. The favourites selection is its own pick per library id, held beside the
+favourites store; it never writes the All list's `picked_row`, so pressing All finds the All
+selection unchanged. The Favourites list keeps its own `ListScroll` per library and never writes
+the destination's All scroll store (Shows New's shared `scrolls.shows` is not the model).
 Rows carry stable Service ids; row menu, select, play, shuffle, and enqueue resolve a favourites id
 through the same lookup the other destinations use (`item_actions::library_item`), extended to read
-the favourites store. *Alternative:* a favourites mode inside each destination's own list. Rejected:
+the favourites store only while that library's active view is Favourites. *Alternative:* a favourites mode inside each destination's own list. Rejected:
 three painters for one list.
 
 **D7. Entering the view refetches; leaving it restores the All list untouched.** Setting the view to
@@ -126,11 +143,23 @@ Favourites starts the fetch (first load, or an in-place refresh when rows are al
 All lists, their selection, and their scroll belong to their own stores and are not edited, so
 pressing All restores them (spec "A Favourites view replaces the destination's list column").
 
-**D8. Music artists are listed and favourited by item id only.** Favourite artist rows come from the
-`/Artists` listing and carry their artist item id, which is in the album payload's id space, so
-play and shuffle use the existing `ArtistIds` track fetch. A Music tree artist row keyed by name
-with no resolved artist item id gets no favourites entry (spec "single-row and library-scoped"),
-because one name can map to several artist items and the entry could not name one.
+**D8. Music artists are listed by item id; the grouped tree offers no artist entry.** Favourite
+artist rows come from the `/Artists` listing and carry their artist item id, which is in the album
+payload's id space. A favourite MusicArtist row's Play All, Shuffle, and Add to Queue, from its row
+controls and from its menu, fetch the artist's tracks with `get_artist_audio_tracks` (`ArtistIds`)
+and play, shuffle, or append them in album, disc, and track order. The fetch is synchronous, as
+`play_folder_gated` is. The GUI routes them: `run_library_menu_entry` catches `PlayFolder`,
+`ShuffleFolder`, and `EnqueueFolder` for a MusicArtist target, and the row's play, shuffle, and
+enqueue paths do the same. The core builder and the TUI do not change, and no path sends
+`ParentId=<artist id>`. The doc comment on `get_artist_audio_tracks`, which says `/Artists` ids
+have no proven equivalence, is updated to cite the probe above. No Music tree
+artist row offers the favourites entry, whether keyed by Service id or by name: the tree's artist
+rows are client-side groupings over albums, mbv holds no artist `EmbyItem` for them, and the entry
+could not follow the item's current state without a fetch this change does not add. A favourite
+artist row of the Favourites list itself carries a real item from the `/Artists` listing, so the
+entry — and unfavouriting — works there. A tree artist row's id can equal a favourite artist's id;
+because the favourites store resolves ids only while the view is Favourites (D6), the tree row
+still resolves no item and offers no entry.
 
 **D9. Ordering within the TV Favourites view follows Emby's section order.** Emby paints Favorite
 Shows and then Favorite Episodes. The GUI list is one column, so the same order is the
