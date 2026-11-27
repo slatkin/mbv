@@ -68,21 +68,21 @@ Tests are the implementer's choice under `docs/invariants/14-test-ownership.md`;
 
 ## 4. Favourites data path
 
-- [ ] 4.1 Add the favourites store (`GuiSectionRequest` per library id plus the in-place refresh
+- [x] 4.1 Add the favourites store (`GuiSectionRequest` per library id plus the in-place refresh
   set) to `GuiClientState`, `LibraryFetchEvent::Favourites`, and its worker spawn using
   `get_favourites` (design D6). Entering the view starts a first load or an in-place refresh
   (design D7).
-- [ ] 4.2 Project the store into the list parts: the collections-first, Title-ordered
+- [x] 4.2 Project the store into the list parts: the collections-first, Title-ordered
   `GuiEmbyRowFrame` list (design D6, D9) as an optional part on the Shows, Music, and
   plain-library list frames, with `loading` and no failure mark (design D6's failure rule).
   Add the Favourites Hero and the separate favourites pick (design D6).
-- [ ] 4.3 Resolve a favourites id in `item_actions::library_item` and the select, play, shuffle,
+- [x] 4.3 Resolve a favourites id in `item_actions::library_item` and the select, play, shuffle,
   and enqueue paths, and select into the Favourites Hero of design D6, not the plain-library Hero
   producer, whose `hero_item` gate paints no Hero for a folder or a non-`Movie`. The favourites
   store resolves an id only while that library's active view is Favourites. Route a favourite
   MusicArtist row's Play All, Shuffle, and Enqueue (row controls and menu entries) through
   the design D8 artist path, and update the `get_artist_audio_tracks` doc comment.
-- [ ] 4.4 After a favourite change succeeds, flip the flag in the GUI stores by id and, when the
+- [x] 4.4 After a favourite change succeeds, flip the flag in the GUI stores by id and, when the
   active view is Favourites, refetch it so an unfavourited row leaves (design D4).
 
 ## 5. Favourites list component
