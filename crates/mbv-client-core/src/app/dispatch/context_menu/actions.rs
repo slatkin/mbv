@@ -1,8 +1,9 @@
-use crate::app::ModelContentEvent;
+pub(in crate::app) mod emby_writes;
+
+use crate::app::dispatch::library::stores::ClientLibraryStores;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{
-    App, ContextAction, LibEvent, PanelFocus, PendingQueueAction, ReplacementExecutor,
-    RoutedReplacementPrep,
+    App, ContextAction, PanelFocus, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep,
 };
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
@@ -37,17 +38,6 @@ impl App {
         }
     }
 
-    /// The one Emby played-state propagation every manual Emby mark shares:
-    /// the server clears the resume position on both a played and an unplayed
-    /// mark, so the queue slot's pair is `(0, played)`.
-    fn propagate_emby_played_to_queue(&mut self, item_id: &str, played: bool) {
-        self.propagate_played_to_queue(vec![mbv_ctrl::ProgressUpdate {
-            content_id: mbv_queue::QueueItemContentId::Emby(item_id.to_string()),
-            position_ticks: 0,
-            finished: played,
-        }]);
-    }
-
     /// Play the resolved queue items in list order: the first replaces the
     /// queue and starts, the rest append (standard-media-context-menus task
     /// 5.3, design D4). Shuffle callers randomize before calling.
@@ -74,12 +64,26 @@ impl App {
         action: Option<ContextAction>,
         cw_item: Option<EmbyItem>,
     ) {
+        self.execute_context_action_with_stores(action, cw_item, None);
+    }
+
+    /// The same dispatch with the Client's own library stores (emby-favourites
+    /// design D4): a write whose landing changes what those stores hold raises
+    /// its [`ClientLibraryEffect`] through them, so a Client that keeps its own
+    /// copies of the item takes the new value. A Client that keeps none (the
+    /// TUI) passes `None`, exactly as it does for a library event.
+    pub fn execute_context_action_with_stores(
+        &mut self,
+        action: Option<ContextAction>,
+        cw_item: Option<EmbyItem>,
+        stores: Option<&mut dyn ClientLibraryStores>,
+    ) {
         // The shell dismisses the mounted ContextMenu component; this only
         // dispatches the chosen action (task 5.3c).
         let lib_idx = self.context_menu_lib_idx();
         let action = self.execute_context_visual_action(action);
         let action = self.execute_context_selection_action(action, lib_idx);
-        let action = self.execute_context_library_action(action, cw_item, lib_idx);
+        let action = self.execute_context_library_action(action, cw_item, lib_idx, stores);
         let action = self.execute_context_queue_and_feed_action(action);
         self.execute_context_navigation_action(action);
     }
@@ -214,6 +218,7 @@ impl App {
         action: Option<ContextAction>,
         cw_item: Option<EmbyItem>,
         lib_idx: Option<usize>,
+        stores: Option<&mut dyn ClientLibraryStores>,
     ) -> Option<ContextAction> {
         match action {
             Some(ContextAction::Play) => {
@@ -262,6 +267,14 @@ impl App {
             }
             Some(ContextAction::MarkUnplayed(id)) => {
                 self.context_set_played(&id, false, lib_idx);
+                None
+            }
+            Some(ContextAction::Favourite(id)) => {
+                self.context_set_favourite(&id, true, stores);
+                None
+            }
+            Some(ContextAction::Unfavourite(id)) => {
+                self.context_set_favourite(&id, false, stores);
                 None
             }
             Some(ContextAction::RemoveFromContinueWatching) => {
@@ -454,6 +467,8 @@ impl App {
                 | ContextAction::EnqueueFolder(_)
                 | ContextAction::MarkPlayed(_)
                 | ContextAction::MarkUnplayed(_)
+                | ContextAction::Favourite(_)
+                | ContextAction::Unfavourite(_)
                 | ContextAction::RemoveFromContinueWatching
                 | ContextAction::RemoveFromQueue(_)
                 | ContextAction::ClearQueue
@@ -506,150 +521,6 @@ impl App {
         }
     }
 
-    fn context_set_played(&mut self, item_id: &str, played: bool, lib_idx: Option<usize>) {
-        let Some(client) = self.emby_client() else {
-            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-            return;
-        };
-        let client = client.lock().unwrap();
-        let result = if played {
-            client.mark_played(item_id)
-        } else {
-            client.mark_unplayed(item_id)
-        };
-        drop(client);
-        match result {
-            Ok(()) => {
-                self.propagate_emby_played_to_queue(item_id, played);
-                if let Some(lib_idx) = lib_idx
-                    && played
-                {
-                    self.remove_played_item_from_library(lib_idx, item_id);
-                }
-                if self.tab.is_home() {
-                    match self.fetch_home() {
-                        Ok(content) => {
-                            // Delivered to the stored `home_content` via the
-                            // lib_tx/ lib_rx drain (task 5.3d).
-                            let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
-                                ModelContentEvent::HomeContentRefreshed(Box::new(content)),
-                            ));
-                        }
-                        Err(e) => {
-                            self.flash(format!("Couldn't refresh home: {e}"), ToastSeverity::Error);
-                        }
-                    }
-                } else if let Some(lib_idx) = lib_idx {
-                    self.refresh_lib(lib_idx);
-                }
-            }
-            Err(e) => self.flash(
-                format!("Couldn't update play status: {e}"),
-                ToastSeverity::Error,
-            ),
-        }
-    }
-
-    fn remove_played_item_from_library(&mut self, lib_idx: usize, item_id: &str) {
-        // A feed-view group keeps its loaded selection rows when a video is
-        // marked played (spec `feed-home-video-group-view`, "Marking played
-        // keeps the row"); only unplayed-only levels of ordinary libraries
-        // drop the row.
-        if let Some(lvl) = self
-            .libs
-            .get_mut(lib_idx)
-            .and_then(|lib| lib.nav_stack.last_mut())
-            && lvl.unplayed_only
-        {
-            let id = item_id.to_string();
-            let before = lvl.items.len();
-            lvl.items.retain(|item| item.id != id);
-            if lvl.items.len() != before {
-                lvl.rows.retire();
-            }
-        }
-    }
-
-    ///
-    /// # Panics
-    ///
-    /// Panics when the Emby client lock is poisoned.
-    pub fn remove_from_continue_watching(&mut self, item: &EmbyItem) {
-        // The shell resolved the target Continue Watching item at the Model
-        // boundary from the stored `home_content` (task 5.3d) -- the App no
-        // longer holds `home.continue_items`/`continue_cursor` to re-read.
-        let Some(client) = self.emby_client() else {
-            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-            return;
-        };
-        let client = client.lock().unwrap();
-        let result = client.hide_from_resume(&item.id);
-        drop(client);
-        match result {
-            Ok(()) => {
-                match self.fetch_home() {
-                    Ok(content) => {
-                        // Delivered to the stored `home_content` via the
-                        // lib_tx/ lib_rx drain (task 5.3d).
-                        let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
-                            ModelContentEvent::HomeContentRefreshed(Box::new(content)),
-                        ));
-                    }
-                    Err(e) => {
-                        self.flash(format!("Couldn't refresh home: {e}"), ToastSeverity::Error);
-                    }
-                }
-            }
-            Err(e) => self.flash(
-                format!("Couldn't remove from continue watching: {e}"),
-                ToastSeverity::Error,
-            ),
-        }
-    }
-
-    ///
-    /// # Panics
-    ///
-    /// Panics when the Emby client lock is poisoned.
-    pub(in crate::app) fn toggle_watched_home_item(&mut self, item: &EmbyItem) {
-        if item.is_folder || item.is_audio() {
-            return;
-        }
-        let Some(client) = self.emby_client() else {
-            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-            return;
-        };
-        let client = client.lock().unwrap();
-        let result = if item.played {
-            client.mark_unplayed(&item.id)
-        } else {
-            client.mark_played(&item.id)
-        };
-        drop(client);
-        let new_played = !item.played;
-        match result {
-            Ok(()) => {
-                self.propagate_emby_played_to_queue(&item.id, new_played);
-                match self.fetch_home() {
-                    Ok(content) => {
-                        // Delivered to the stored `home_content` via the
-                        // lib_tx/ lib_rx drain (task 5.3d).
-                        let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
-                            ModelContentEvent::HomeContentRefreshed(Box::new(content)),
-                        ));
-                    }
-                    Err(e) => {
-                        self.flash(format!("Couldn't refresh home: {e}"), ToastSeverity::Error);
-                    }
-                }
-            }
-            Err(e) => self.flash(
-                format!("Couldn't update play status: {e}"),
-                ToastSeverity::Error,
-            ),
-        }
-    }
-
     /// The played-state action a `Recently added` row's context menu offers
     /// (spec `home-latest-sections`, "Home actions resolve the row's own
     /// section and Service identity"): for each Service, the one
@@ -669,66 +540,6 @@ impl App {
             // A Twitch row offers the generic queue actions only: played
             // state is a Service concept it does not carry (design D8).
             QueueItem::Twitch(_) => {}
-        }
-    }
-
-    /// `toggle_watched`'s cursor-resolving wrapper has been deleted (task
-    /// 4.3, R1): the live path is the item-taking
-    /// `toggle_watched_item(lib_idx, item)` the shell routes
-    /// `EmbyLibraryToggleWatched` through. Folder/audio guards, mark played/
-    /// unplayed API behavior, unplayed-only removal, refresh,
-    /// and unavailable-Service/error toasts are preserved exactly. The
-    /// unplayed-only removal previously used `lvl.cursor` (the App cursor,
-    /// which the legacy call always resolves to the toggled item); it now
-    /// targets the supplied item's identity — identical in the legacy flow,
-    /// and correct when the component-selected item differs from a parked
-    /// App cursor. Feed-view groups keep their rows when a video is marked
-    /// played (task 4.1, design D4).
-    ///
-    /// # Panics
-    ///
-    /// Panics when the Emby client lock is poisoned.
-    pub fn toggle_watched_item(&mut self, lib_idx: usize, item: &EmbyItem) {
-        if item.is_folder || item.is_audio() {
-            return;
-        }
-        let Some(client) = self.emby_client() else {
-            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-            return;
-        };
-        let client = client.lock().unwrap();
-        let result = if item.played {
-            client.mark_unplayed(&item.id)
-        } else {
-            client.mark_played(&item.id)
-        };
-        drop(client);
-        match result {
-            Ok(()) => {
-                self.propagate_emby_played_to_queue(&item.id, !item.played);
-                if !item.played {
-                    self.remove_watched_item_from_library(lib_idx, &item.id);
-                }
-                self.refresh_lib(lib_idx);
-            }
-            Err(e) => self.flash(
-                format!("Couldn't update play status: {e}"),
-                ToastSeverity::Error,
-            ),
-        }
-    }
-
-    fn remove_watched_item_from_library(&mut self, lib_idx: usize, item_id: &str) {
-        // Feed-view groups keep their loaded selection rows when a video is
-        // marked watched (spec `feed-home-video-group-view`, "Marking played
-        // keeps the row"); only unplayed-only levels of ordinary libraries
-        // drop the row.
-        if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut()
-            && lvl.unplayed_only
-            && let Some(pos) = lvl.items.iter().position(|item| item.id == item_id)
-        {
-            lvl.items.remove(pos);
-            lvl.rows.retire();
         }
     }
 }

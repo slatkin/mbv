@@ -4,7 +4,7 @@
 
 ### Requirement: Shows selects one view
 
-The GUI Shows destination's list header SHALL paint one dropdown with exactly four single-choice entries: All, New, Upcoming, and Favourites, in that order. All SHALL be the default. A press on one entry SHALL replace the active entry and close the dropdown. The choice SHALL be a view of the destination and SHALL NOT be a collection set, a collection target, a collection filter, or a key binding. The saved launch state SHALL keep All, New, and Upcoming and SHALL restore Favourites as All. The TUI Client's Shows modes SHALL NOT change.
+The GUI Shows destination's list header SHALL paint one dropdown with exactly five single-choice entries: All, New, Upcoming, Favourite Shows, and Favourite Episodes, in that order. All SHALL be the default. A press on one entry SHALL replace the active entry and close the dropdown. The choice SHALL be a view of the destination and SHALL NOT be a collection set, a collection target, a collection filter, or a key binding. The saved launch state SHALL keep All, New, and Upcoming and SHALL restore any Favourites view as All. The TUI Client's Shows modes SHALL NOT change.
 
 #### Scenario: Shows opens on All
 
@@ -17,14 +17,14 @@ The GUI Shows destination's list header SHALL paint one dropdown with exactly fo
 - **WHEN** the user presses New
 - **THEN** New is the only marked entry and the dropdown closes
 
-#### Scenario: Favourites is the fourth entry
+#### Scenario: The favourite views are the last entries
 
 - **WHEN** the user opens the Shows view dropdown
-- **THEN** it lists All, New, Upcoming, and Favourites, in that order
+- **THEN** it lists All, New, Upcoming, Favourite Shows, and Favourite Episodes, in that order
 
 #### Scenario: Favourites does not survive a restart
 
-- **GIVEN** Favourites is the active Shows view when mbv quits
+- **GIVEN** Favourite Shows is the active Shows view when mbv quits
 - **WHEN** mbv starts again and opens the Shows destination
 - **THEN** the dropdown marks All
 
@@ -42,6 +42,11 @@ Music, Podcasts, Feeds, and an Emby library in feed-group mode SHALL each show o
 - **WHEN** Shows, Audiobooks, or a plain Emby library paints its list
 - **THEN** no collection dropdown shows
 - **AND** Shows and a plain Emby library paint their single-choice view dropdown, which is not a collection filter
+
+#### Scenario: Music paints no view dropdown
+
+- **WHEN** a Grouped Music destination paints its list
+- **THEN** no view dropdown shows and the collection dropdown is the only dropdown in the header
 
 #### Scenario: Two collections are checked
 
@@ -64,11 +69,6 @@ The GUI Library panel SHALL show no pill row and no selector row between the top
 - **WHEN** the Podcasts destination paints
 - **THEN** the list header's title line shows the Service mark at the left, the refresh button, the dropdown trigger, and the sort control at the right end, and nothing else
 - **AND** no row of pills or selector controls shows between the top bar and the list
-
-#### Scenario: A Music header paints both triggers
-
-- **WHEN** the Music destination paints its All view
-- **THEN** the collection dropdown trigger sits directly to the left of the view dropdown trigger
 
 #### Scenario: A feed-group header paints both triggers
 
@@ -170,12 +170,12 @@ A Library list sorted by name SHALL show letter headings and a letter rail from 
 
 ### Requirement: A GUI tree list header shows Expand all and Collapse all
 
-The list header of the Music All view and of the Shows All view SHALL show an Expand all button and a Collapse all button on its title line, directly to the left of the line's first dropdown trigger. The Shows New, Upcoming, and Favourites views, the Music Favourites view, and every other Library list, SHALL show neither button. The buttons SHALL NOT add a row between the top bar and the list.
+The list header of the Music All view and of the Shows All view SHALL show an Expand all button and a Collapse all button on its title line, directly to the left of the line's first dropdown trigger. The Shows New, Upcoming, Favourite Shows, and Favourite Episodes views and every other Library list, SHALL show neither button. The buttons SHALL NOT add a row between the top bar and the list.
 
 #### Scenario: Music title line
 
 - **WHEN** the Music destination paints its All view
-- **THEN** the title line shows the Service mark at the left, then the refresh button, Expand all, Collapse all, the collection dropdown trigger, and the view dropdown trigger at the right end
+- **THEN** the title line shows the Service mark at the left, then the refresh button, Expand all, Collapse all, and the collection dropdown trigger at the right end
 
 #### Scenario: Shows All title line
 
@@ -190,11 +190,6 @@ The list header of the Music All view and of the Shows All view SHALL show an Ex
 #### Scenario: A flat list shows no tree buttons
 
 - **WHEN** the Podcasts destination paints
-- **THEN** the title line shows no Expand all and no Collapse all button
-
-#### Scenario: Music Favourites shows no tree buttons
-
-- **WHEN** the Music destination paints its Favourites view
 - **THEN** the title line shows no Expand all and no Collapse all button
 
 ### Requirement: The list header names a Service destination by its Service mark
@@ -214,7 +209,7 @@ The GUI Library list header of a Service destination SHALL show the destination'
 #### Scenario: Music shows the Emby mark
 
 - **WHEN** the user opens a Music destination
-- **THEN** the list header shows the Emby mark and no "Artists" title text, and the view dropdown stays at the right end of the line
+- **THEN** the list header shows the Emby mark and no "Artists" title text
 
 #### Scenario: Shows shows the Emby mark under every view
 
@@ -233,7 +228,7 @@ The GUI Library list header of a Service destination SHALL show the destination'
 
 ### Requirement: The Library Status bar shows hints and the location
 
-While the Library panel shows, a Library Status bar SHALL show under the Library column: the Search field on the left, and the location on the right: the destination, All or the names of the checked collections, and the picked item. While a library's view is Favourites, the location SHALL name Favourites in place of the collection names. The Music location names the picked album's title, or, while the Hero shows the artist page, the artist's name. The bar SHALL show no key hints. While prefix mode is armed, the armed state SHALL paint after the Search field, and the field and the location SHALL stay. The bar SHALL show no toast.
+While the Library panel shows, a Library Status bar SHALL show under the Library column: the Search field on the left, and the location on the right: the destination, All or the names of the checked collections, and the picked item. While a library's view is Favourites, Favourite Shows, or Favourite Episodes, the location SHALL name that view in place of the collection names. The Music location names the picked album's title, or, while the Hero shows the artist page, the artist's name. The bar SHALL show no key hints. While prefix mode is armed, the armed state SHALL paint after the Search field, and the field and the location SHALL stay. The bar SHALL show no toast.
 
 #### Scenario: Music has an album picked
 
@@ -249,9 +244,9 @@ While the Library panel shows, a Library Status bar SHALL show under the Library
 
 #### Scenario: A Favourites view names Favourites
 
-- **GIVEN** Music is active with Hip-Hop checked and its Favourites view painting
+- **GIVEN** a Movies library is active and its Favourites view painting
 - **WHEN** the Library Status bar paints
-- **THEN** it shows the Search field and the location Music, Favourites, and the picked favourite, and no collection name
+- **THEN** it shows the Search field and the location Movies, Favourites, and the picked favourite
 
 #### Scenario: Two collections are checked
 
@@ -266,23 +261,24 @@ While the Library panel shows, a Library Status bar SHALL show under the Library
 
 ## ADDED Requirements
 
-### Requirement: Every other Emby library destination offers a Favourites view
+### Requirement: Every non-music Emby library destination offers a Favourites view
 
-The GUI destination of every Emby library other than a Shows library, meaning a plain library such
-as Movies and a Music library, SHALL paint a view dropdown in its list header with exactly two
+The GUI destination of every Emby library other than a Shows library or a Grouped Music library,
+meaning a plain library such as Movies or a non-grouped music library, SHALL paint a view dropdown
+in its list header with exactly two
 single-choice entries: All and Favourites, in that order. All SHALL be the default and the choice
-SHALL NOT be saved across a restart. Audiobookshelf and Feeds destinations SHALL paint no such
-dropdown.
+SHALL NOT be saved across a restart. A Grouped Music library, Audiobookshelf, and Feeds
+destinations SHALL paint no such dropdown.
 
 #### Scenario: Movies library
 
 - **WHEN** the user opens a Movies destination
 - **THEN** its list header shows a view dropdown that marks All and offers Favourites
 
-#### Scenario: Music library
+#### Scenario: Grouped Music library
 
-- **WHEN** the user opens a Music destination and presses Favourites
-- **THEN** the list shows that library's favourite artists, albums, and songs and the dropdown marks Favourites
+- **WHEN** the user opens a Grouped Music destination
+- **THEN** its list header shows no view dropdown
 
 #### Scenario: Audiobookshelf library
 
@@ -291,7 +287,7 @@ dropdown.
 
 #### Scenario: Collection dropdown beside the view dropdown
 
-- **GIVEN** a Music destination whose header paints a collection dropdown
+- **GIVEN** an Emby feed-group destination whose header paints a collection dropdown
 - **WHEN** the user presses Favourites
 - **THEN** the view dropdown marks Favourites and the collection dropdown is not painted
 - **WHEN** the user presses All

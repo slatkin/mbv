@@ -340,6 +340,7 @@ mod reporting_tests {
             collection_type: String::new(),
             runtime_ticks: 1,
             played: false,
+            is_favorite: false,
             playback_position_ticks: 0,
             series_id: String::new(),
             series_name: String::new(),

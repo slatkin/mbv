@@ -278,12 +278,13 @@ fn shows_content(
         current_tab: Some(2),
         destination: GuiDestinationList::Shows(GuiShowsList {
             sort: None,
-            view: crate::gui_core::GuiShowsView::All,
+            view: crate::gui_core::GuiLibraryView::All,
             lib_idx: 0,
             loading: false,
             series,
             upcoming_failed: false,
             rows: Vec::new(),
+            favourites: None,
         }),
     };
     let detail = GuiLibraryDetail::Shows(GuiShowsDetail {
@@ -329,6 +330,7 @@ fn ui_facts(state: &LibraryState) -> String {
 // Workspace keys act on (design D2).
 fn series_hero() -> GuiShowsHeroFrame {
     GuiShowsHeroFrame {
+        heart: None,
         title: "Better Call Saul".to_owned(),
         parent: None,
         facts: crate::bridge::frame::library::GuiHeroFactsFrame {

@@ -408,10 +408,12 @@ pub fn LibraryList() -> Element {
     let filter_library = library.clone();
     let accept_library = library.clone();
     // The tree's two header presses (gui-list-header-buttons design D1, D4):
-    // Music is a tree list, so its header paints both.
+    // Music is a tree list, so its All view paints both. The Favourites view
+    // paints no tree buttons (emby-favourites design D5, the title line's
+    // order).
     let expand_library = library.clone();
     let collapse_library = library.clone();
-    let tree = Some(LibraryTreeActions {
+    let tree = frame.is_some().then(|| LibraryTreeActions {
         on_expand_all: Callback::new(move |()| expand_library.expand_all_music()),
         on_collapse_all: Callback::new(move |()| collapse_library.collapse_all_music()),
     });
@@ -428,6 +430,9 @@ pub fn LibraryList() -> Element {
         label: String::new(),
         label_attr: None,
         collections,
+        // A Grouped Music destination is excluded from favourites
+        // everywhere (emby-favourites design D11), so its header paints no
+        // view dropdown: the collection dropdown is its only one.
         view: None,
         sort: None,
         on_refresh: Callback::new(move |()| refresh_library.refresh_music_list()),

@@ -57,8 +57,9 @@ impl GuiCore {
             | GuiLibraryCommand::CollectionToggle { .. }
             | GuiLibraryCommand::CollectionAll { .. }
             | GuiLibraryCommand::ListSort { .. }
-            | GuiLibraryCommand::ShowsSetView { .. }
+            | GuiLibraryCommand::LibrarySetView { .. }
             | GuiLibraryCommand::ShowDetail { .. }
+            | GuiLibraryCommand::SetFavourite { .. }
             | GuiLibraryCommand::OpenAlbum { .. }
             | GuiLibraryCommand::Play { .. }
             | GuiLibraryCommand::AddToQueue { .. }
@@ -131,8 +132,9 @@ impl GuiCore {
             | GuiLibraryCommand::CollectionToggle { .. }
             | GuiLibraryCommand::CollectionAll { .. }
             | GuiLibraryCommand::ListSort { .. }
-            | GuiLibraryCommand::ShowsSetView { .. }
+            | GuiLibraryCommand::LibrarySetView { .. }
             | GuiLibraryCommand::ShowDetail { .. }
+            | GuiLibraryCommand::SetFavourite { .. }
             | GuiLibraryCommand::OpenAlbum { .. }
             | GuiLibraryCommand::Play { .. }
             | GuiLibraryCommand::AddToQueue { .. }
@@ -215,8 +217,9 @@ impl GuiCore {
             | GuiLibraryCommand::CollectionToggle { .. }
             | GuiLibraryCommand::CollectionAll { .. }
             | GuiLibraryCommand::ListSort { .. }
-            | GuiLibraryCommand::ShowsSetView { .. }
+            | GuiLibraryCommand::LibrarySetView { .. }
             | GuiLibraryCommand::ShowDetail { .. }
+            | GuiLibraryCommand::SetFavourite { .. }
             | GuiLibraryCommand::OpenAlbum { .. }
             | GuiLibraryCommand::Play { .. }
             | GuiLibraryCommand::AddToQueue { .. }
@@ -278,8 +281,9 @@ impl GuiCore {
             | GuiLibraryCommand::CollectionToggle { .. }
             | GuiLibraryCommand::CollectionAll { .. }
             | GuiLibraryCommand::ListSort { .. }
-            | GuiLibraryCommand::ShowsSetView { .. }
+            | GuiLibraryCommand::LibrarySetView { .. }
             | GuiLibraryCommand::ShowDetail { .. }
+            | GuiLibraryCommand::SetFavourite { .. }
             | GuiLibraryCommand::OpenAlbum { .. }
             | GuiLibraryCommand::Play { .. }
             | GuiLibraryCommand::AddToQueue { .. }

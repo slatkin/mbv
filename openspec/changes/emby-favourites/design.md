@@ -82,7 +82,8 @@ the official client sends and what the user's server is known to serve; mbv uses
 
 **D4. After a success, flip the flag in every held copy by id, then refresh what is open.** A helper
 in client-core sets `is_favorite` on matching `EmbyItem`s in every App-held copy: the TUI levels,
-Home content, the series details the Shows tree reads (`series_detail_item`), the album track cache
+Home content — both the Continue Watching list and the `home_recently_added` store, whose rows
+back the Home row menu's stable target — the series details the Shows tree reads (`series_detail_item`), the album track cache
 (`album_tracks_cache`), and the artist detail cache. A helper in the GUI core does the same for the
 GUI's own stores: the plain-library root lists, Shows New, the Music album store, and the
 favourites store. The GUI cannot write App fields (shared-core rule 2), so App-held copies flip
@@ -92,9 +93,13 @@ refetch every list. Rejected: refetching a large library list for one flag is wa
 would reset the list's scroll and selection.
 
 **D5. One generalised view type and dropdown.** `GuiShowsView` becomes `GuiLibraryView` with
-variants All, New, Upcoming, Favourites. `GuiLibraryView::choices(destination)` returns the Shows
-set (All, New, Upcoming, Favourites) for Shows and (All, Favourites) for every other Emby
-destination. The per-library store (`shows_views`) becomes the library-view store keyed by library
+variants All, New, Upcoming, Favourites, FavouriteShows, and FavouriteEpisodes.
+`GuiLibraryView::choices(destination)` returns the Shows
+set (All, New, Upcoming, FavouriteShows, FavouriteEpisodes) for Shows, (All, Favourites) for
+every non-music Emby
+destination, and nothing for a Grouped Music library: its header paints no view dropdown at all,
+exactly as before this change. FavouriteShows and FavouriteEpisodes never apply outside a Shows
+destination, because only a TV library holds Series and Episode rows. The per-library store (`shows_views`) becomes the library-view store keyed by library
 index. `ShowsSetView` becomes a destination-neutral `LibrarySetView`. The dropdown component
 becomes `LibraryViewDropdown`, still a thin supplier of rows to `LibraryDropdown` (invariant 38).
 The launch state keeps `GuiLaunchShowsView` unchanged; saving maps Favourites to All, and only
@@ -113,7 +118,11 @@ Favourites in place of the collection names.
 
 **D6. One Favourites list, fetched per library, painted by one component.** The GUI core holds a
 favourites store keyed by library id, holding the same request state type the New store uses
-(`GuiSectionRequest`, with the in-place refresh set). Failure follows the New store's rule exactly:
+(`GuiSectionRequest`, with the in-place refresh set). The store holds every favourite the fetch
+returns; the projection filters it by the active view: a Shows destination's FavouriteShows view
+projects the Series rows, its FavouriteEpisodes view projects the Episode rows, and any other
+view or destination projects the whole list. A favourite in a TV library that is neither a Series
+nor an Episode shows in neither view, as Emby's own TV Favorites tab has no section for it. Failure follows the New store's rule exactly:
 a failed first load lands an empty list, and a failed in-place refresh keeps the rows already held.
 No spec scenario paints a failure state, so the list's frame part carries a `loading` flag and no
 failure mark. The fetch runs on a worker and lands through
@@ -122,7 +131,8 @@ a new `LibraryFetchEvent::Favourites { library_id, result }`:
 - every library: `Items?ParentId=<lib>&Recursive=true&Filters=IsFavorite` with the same `Fields` as
   `LATEST_FIELDS` (`UserData` included, invariant 19 does not apply: no root level is stamped);
 - Music libraries only: also `/Artists?UserId&ParentId=<lib>&Filters=IsFavorite&Fields=UserData`,
-  merged by id.
+  merged by id. A Grouped Music library never starts the fetch at all (D11): the merge exists
+  for a non-grouped music library, the only music library that can open a Favourites view.
 
 Client-side the list drops any item that fails `supports_favourite()` (Emby can return a favourited
 Season), orders collections first (types that are folders) then media items, each by `SortName`
@@ -147,7 +157,9 @@ Favourites starts the fetch (first load, or an in-place refresh when rows are al
 All lists, their selection, and their scroll belong to their own stores and are not edited, so
 pressing All restores them (spec "A Favourites view replaces the destination's list column").
 
-**D8. Music artists are listed by item id; the grouped tree offers no artist entry.** Favourite
+**D8. Music artists are listed by item id; the grouped tree offers no artist entry.** This
+whole decision now applies only to a non-grouped music library, the one music library shape
+that can list favourites (D11). Favourite
 artist rows come from the `/Artists` listing and carry their artist item id, which is in the album
 payload's id space. A favourite MusicArtist row's Play All, Shuffle, and Enqueue, from its row
 controls and from its menu, fetch the artist's tracks with `get_artist_audio_tracks` (`ArtistIds`)
@@ -165,9 +177,33 @@ entry — and unfavouriting — works there. A tree artist row's id can equal a 
 because the favourites store resolves ids only while the view is Favourites (D6), the tree row
 still resolves no item and offers no entry.
 
-**D9. Ordering within the TV Favourites view follows Emby's section order.** Emby paints Favorite
-Shows and then Favorite Episodes. The GUI list is one column, so the same order is the
-collections-first rule of D6: Series rows, then Episode rows.
+**D9. The TV library separates Favourite Shows and Favourite Episodes into two views.** Emby
+paints Favorite Shows and Favorite Episodes as two sections of its TV Favorites tab. The GUI
+follows that separation exactly, as two view dropdown entries, instead of merging both types
+into one list. Inside each view the rows order by Title, and neither view paints a sort control.
+*Alternative:* one Favourites view listing Series rows then Episode rows. Rejected: it merges
+what Emby keeps separate, and the user separated them when planning this change.
+
+**D10. Every non-music Emby Hero carries a heart toggle in its upper right.** The heart shows the
+Hero item's favourite state (empty when not a favourite, filled when one) and a press toggles it
+through the same write the menu entry runs (D3, D4), so the heart, the menu entry, and every held
+copy flip together. The heart paints exactly when the same item's menu would offer the favourites
+entry in that place (D11): the item supports favourites and the Hero does not belong to a Grouped
+Music destination. A Hero whose item does not support favourites paints no heart, never a
+disabled one. The heart is a GUI control; the TUI already reaches the same write through its
+shared menu entry. *Alternative:* heart only in the Favourites views. Rejected: favouriting an
+item the user is looking at is the primary use the control exists for, and restricting it to the
+list of already-favourited items inverts it.
+
+**D11. A Grouped Music library is excluded from favourites everywhere.** Its header paints no
+view dropdown, its rows' menus push no favourites entry — artist, album, and track rows alike,
+through every path that resolves the row inside that library — and its Heroes paint no heart.
+The exclusion is contextual, not type-based: the same Audio item in a non-grouped music library
+or a mixed plain library keeps its entry, because what the user excluded is the grouped Music
+destination, not the music types. The shared builder learns the exclusion from the resolved
+target's library context; a Home row is never grouped-music context and keeps its entry.
+*Alternative:* exclude the music types everywhere. Rejected: it would strip the entry from
+non-grouped music, which the user explicitly kept.
 
 ## Risks / Trade-offs
 

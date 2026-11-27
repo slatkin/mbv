@@ -22,6 +22,7 @@ use crate::art::backdrop::BackdropStyle;
 use crate::bridge::frame::library::GuiLibraryDetail;
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
+use crate::window::components::library_hero_heart::LibraryHeroHeart;
 use crate::window::library::hero::hero_command;
 use crate::window::library::lettered::{EmbyList, LetteredDestination};
 use crate::window::library::parts::library_emby_detail;
@@ -101,6 +102,14 @@ pub fn LibraryEmbyHero(props: LibraryEmbyHeroProps) -> Element {
     // the bundled placeholder.
     let backdrop = hero_backdrop(hero.art.as_ref(), BackdropStyle::Video);
 
+    // The heart (emby-favourites design D10): the header band's one action,
+    // present exactly while the item supports favourites.
+    let heart = hero.heart.clone().map(|heart| {
+        rsx! {
+            LibraryHeroHeart { heart, hook: "data-library-emby-hero-heart" }
+        }
+    });
+
     rsx! {
         LibraryHeroFrame {
             attr: "emby",
@@ -114,6 +123,7 @@ pub fn LibraryEmbyHero(props: LibraryEmbyHeroProps) -> Element {
             overview: hero.overview.clone(),
             cast: hero.cast.clone(),
             backdrop,
+            header_action: heart,
         }
     }
 }

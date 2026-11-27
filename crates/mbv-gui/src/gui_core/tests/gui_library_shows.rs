@@ -14,11 +14,11 @@ use mbv_queue::TvContentMode;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
 use rstest::rstest;
 
-/// The Shows view a stub `App` holds beside it (`crate::gui_core::test_support::gui_shows_view`
+/// The library view a stub `App` holds beside it (`crate::gui_core::test_support::stub_gui_state`
 /// takes the Client's core, and these tests hold the state in the sidecar).
-fn view_of(lib_idx: usize) -> GuiShowsView {
+fn view_of(lib_idx: usize) -> GuiLibraryView {
     crate::gui_core::test_support::stub_gui_state(|gui| {
-        crate::gui_core::gui_library::shows_view(gui, lib_idx)
+        crate::gui_core::gui_library::library_view(gui, lib_idx)
     })
 }
 
@@ -356,16 +356,20 @@ fn one_shows_view_is_active_at_a_time() {
     let _guard = TestStateDirGuard::new();
     let mut app = empty_shows_app();
 
-    assert_eq!(view_of(0), GuiShowsView::All);
-    for view in [GuiShowsView::New, GuiShowsView::Upcoming, GuiShowsView::All] {
+    assert_eq!(view_of(0), GuiLibraryView::All);
+    for view in [
+        GuiLibraryView::New,
+        GuiLibraryView::Upcoming,
+        GuiLibraryView::All,
+    ] {
         apply_gui_library_command(
             &mut app,
-            GuiLibraryCommand::ShowsSetView { lib_idx: 0, view },
+            GuiLibraryCommand::LibrarySetView { lib_idx: 0, view },
         );
         assert_eq!(view_of(0), view);
     }
     assert!(crate::gui_core::test_support::stub_gui_state(|gui| gui
-        .shows_views
+        .library_views
         .contains_key(&0)));
 }
 
@@ -393,9 +397,9 @@ fn the_new_view_paints_the_merged_latest_episodes() {
     });
     apply_gui_library_command(
         &mut app,
-        GuiLibraryCommand::ShowsSetView {
+        GuiLibraryCommand::LibrarySetView {
             lib_idx: 0,
-            view: GuiShowsView::New,
+            view: GuiLibraryView::New,
         },
     );
 
@@ -428,9 +432,9 @@ fn the_upcoming_view_paints_display_only_premieres() {
     app.seed_tv_upcoming_snapshot_for_test("lib-b", vec![sooner.clone()]);
     apply_gui_library_command(
         &mut app,
-        GuiLibraryCommand::ShowsSetView {
+        GuiLibraryCommand::LibrarySetView {
             lib_idx: 0,
-            view: GuiShowsView::Upcoming,
+            view: GuiLibraryView::Upcoming,
         },
     );
 
@@ -462,9 +466,9 @@ fn an_upcoming_row_resolves_no_playable_item() {
     );
     apply_gui_library_command(
         &mut app,
-        GuiLibraryCommand::ShowsSetView {
+        GuiLibraryCommand::LibrarySetView {
             lib_idx: 0,
-            view: GuiShowsView::Upcoming,
+            view: GuiLibraryView::Upcoming,
         },
     );
     let id = crate::gui_core::test_support::gui_shows_projection(&mut app, 0).rows[0]
@@ -492,9 +496,9 @@ fn an_empty_or_failed_new_fetch_paints_the_empty_state(
     let mut app = empty_shows_app();
     apply_gui_library_command(
         &mut app,
-        GuiLibraryCommand::ShowsSetView {
+        GuiLibraryCommand::LibrarySetView {
             lib_idx: 0,
-            view: GuiShowsView::New,
+            view: GuiLibraryView::New,
         },
     );
     let mut core = crate::gui_core::test_support::core_holding_stub_gui(&mut app);
@@ -528,9 +532,9 @@ fn an_upcoming_row_shows_its_series_image() {
     );
     apply_gui_library_command(
         &mut app,
-        GuiLibraryCommand::ShowsSetView {
+        GuiLibraryCommand::LibrarySetView {
             lib_idx: 0,
-            view: GuiShowsView::Upcoming,
+            view: GuiLibraryView::Upcoming,
         },
     );
     let still = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(

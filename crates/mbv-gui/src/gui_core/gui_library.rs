@@ -17,6 +17,7 @@ pub(crate) mod emby;
 mod emby_projection;
 pub(crate) mod ensure;
 mod entry_list;
+mod favourites;
 mod feeds;
 mod feeds_projection;
 mod hero_facts;
@@ -24,6 +25,7 @@ mod home;
 mod item_actions;
 mod item_menu;
 mod launch;
+mod library_view;
 mod list_sort;
 pub(crate) mod marks;
 pub(crate) mod podcasts;
@@ -36,7 +38,6 @@ mod search;
 mod shows;
 pub(crate) mod shows_open_loads;
 pub(crate) mod shows_projection;
-mod shows_view;
 pub(crate) mod store;
 mod tabs;
 mod tv;
@@ -58,8 +59,14 @@ use self::emby::GuiEmbyFeedCollectionSite;
 pub use self::emby::GuiEmbyLibrarySelection;
 pub(crate) use self::emby::GuiEmbyRootItems;
 pub(crate) use self::emby::emby_feed_wants_target_in_set;
-pub use self::emby_projection::{GuiEmbyHero, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind};
+pub use self::emby_projection::{
+    GuiEmbyHero, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind, GuiHeroHeart,
+};
 pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow};
+pub use self::favourites::GuiFavouritesProjection;
+pub(crate) use self::favourites::apply_favourite_change;
+#[cfg(test)]
+pub(crate) use self::favourites::{FavouritesFetch, favourites_fetch};
 use self::feeds::GuiFeedsCollectionSite;
 pub use self::feeds::GuiFeedsSelection;
 #[cfg(test)]
@@ -78,6 +85,8 @@ pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
     GuiHomeRowKind,
 };
+#[cfg(test)]
+pub(crate) use self::item_actions::library_item;
 pub use self::item_menu::{GuiLibraryMenuItem, GuiLibraryMenuRow, GuiLibraryRowMenu};
 pub use self::launch::GuiLaunchOpen;
 pub use self::list_sort::{GuiListSort, GuiListSortFrame, GuiSortTarget};
@@ -87,6 +96,9 @@ pub use self::marks::GuiPlayheadMarks;
 
 use self::podcasts::GuiPodcastsCollectionSite;
 
+pub use self::library_view::GuiLibraryView;
+#[cfg(test)]
+pub(crate) use self::library_view::library_view;
 pub use self::podcasts::GuiPodcastsSelection;
 pub use self::podcasts_projection::{
     GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsProjection, GuiPodcastsRow,
@@ -102,13 +114,12 @@ pub(crate) use self::rows_in_view::queue_in_view_row_fetches;
 pub(crate) use self::search::GuiSearchStore;
 pub use self::search::{GuiSearchProjection, GuiSearchRow};
 #[cfg(test)]
-pub(crate) use self::shows::{refetch_shows_new, shows_view};
+pub(crate) use self::shows::refetch_shows_new;
 pub(crate) use self::shows_open_loads::GuiShowsOpenInView;
 pub use self::shows_projection::{
     GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode,
     GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
 };
-pub use self::shows_view::GuiShowsView;
 pub(crate) use self::store::GuiGroupAlbums;
 use self::store::GuiMusicCollectionSite;
 #[cfg(test)]
@@ -144,6 +155,9 @@ pub enum GuiRowArtScope {
     ShowsNew,
     /// The Shows Upcoming list's flat premiere rows.
     ShowsUpcoming,
+    /// The Favourites list's rows (emby-favourites design D6), whichever Emby
+    /// destination paints that view.
+    Favourites,
     /// The Podcasts list's episode rows.
     Podcasts,
     /// The Audiobooks list's book rows.
@@ -186,9 +200,16 @@ pub enum GuiLibraryCommand {
         target: GuiSortTarget,
         sort: GuiListSort,
     },
-    /// Select the Shows destination's single view (design D8): All, New, or
-    /// Upcoming. This is a view choice, not a collection command.
-    ShowsSetView { lib_idx: usize, view: GuiShowsView },
+    /// Select the destination's single view (design D8; emby-favourites
+    /// design D5): one of the destination's own choices. This is a view
+    /// choice, not a collection command.
+    LibrarySetView {
+        lib_idx: usize,
+        view: GuiLibraryView,
+    },
+    /// Set or clear the item's favourite state (emby-favourites design D10):
+    /// the Hero heart's press, which runs the same write the menu entry runs.
+    SetFavourite { item_id: String, favourite: bool },
     /// Show the item's detail in the Hero (design D2).
     ShowDetail { item_id: String },
     /// Open an album node: load its tracks when the cache does not hold them
@@ -385,6 +406,23 @@ impl GuiCore {
         self.dispatch_gui_library_command(command);
     }
 
+    /// The heart's write (emby-favourites design D10): the menu entry's own
+    /// shared context action, so the landing flips every held copy through
+    /// the same path.
+    fn set_gui_favourite(&mut self, item_id: String, favourite: bool) {
+        let action = if favourite {
+            Some(mbv_ui_model::context_menu::ContextAction::Favourite(
+                item_id,
+            ))
+        } else {
+            Some(mbv_ui_model::context_menu::ContextAction::Unfavourite(
+                item_id,
+            ))
+        };
+        self.app
+            .execute_context_action_with_stores(action, None, Some(&mut self.gui));
+    }
+
     /// The Library command's arms (design D2): the one dispatch the core's own
     /// call runs, so every variant has its own handling site here.
     fn dispatch_gui_library_command(&mut self, command: GuiLibraryCommand) {
@@ -401,8 +439,11 @@ impl GuiCore {
             GuiLibraryCommand::ListSort { target, sort } => {
                 self.apply_gui_list_sort(target, sort);
             }
-            GuiLibraryCommand::ShowsSetView { lib_idx, view } => {
-                self.set_gui_shows_view(lib_idx, view);
+            GuiLibraryCommand::LibrarySetView { lib_idx, view } => {
+                self.set_gui_library_view(lib_idx, view);
+            }
+            GuiLibraryCommand::SetFavourite { item_id, favourite } => {
+                self.set_gui_favourite(item_id, favourite);
             }
             GuiLibraryCommand::ShowDetail { item_id } => {
                 self.show_gui_library_detail(&item_id);
@@ -527,7 +568,15 @@ impl GuiCore {
     /// load of its own. Home and Music have no user-action work. The match names
     /// every destination kind and every absent case, so a new kind does not
     /// compile until it states its open step.
+    ///
+    /// An Emby destination opened on its stored Favourites view fetches that
+    /// list again first (emby-favourites design D7): a favourite added in
+    /// another destination shows on the next opening. It rides the open step
+    /// and never the load pass, which runs on every paint.
     fn open_gui_active_destination(&mut self) {
+        if let Some(lib_idx) = Self::open_favourites_library(&self.app, &self.gui) {
+            self.refetch_open_favourites(lib_idx);
+        }
         match tabs::active_destination(&self.app) {
             // No presented destination: the open names nothing to open.
             None => {}
@@ -547,6 +596,17 @@ impl GuiCore {
                 self.gui_podcast_open(lib_idx);
             }
         }
+    }
+
+    /// The active destination's Emby library while that library's stored view
+    /// is Favourites (emby-favourites design D7): the library an open fetches
+    /// again. `None` for every other destination and every other view.
+    fn open_favourites_library(
+        app: &App,
+        gui: &crate::gui_core::gui_client_state::GuiClientState,
+    ) -> Option<usize> {
+        let lib_idx = tabs::active_destination(app)?.emby_library_index()?;
+        library_view::paints_favourites(gui, lib_idx).then_some(lib_idx)
     }
 
     /// Select a Home row (design D2, D12): the row the Hero shows. The

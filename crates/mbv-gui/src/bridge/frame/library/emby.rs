@@ -5,9 +5,11 @@
 //! frame carries, never by position.
 
 use crate::gui_core::{
-    GuiCollections, GuiEmbyHero, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind, GuiListSortFrame,
+    GuiCollections, GuiEmbyHero, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind, GuiHeroHeart,
+    GuiLibraryView, GuiListSortFrame,
 };
 
+use super::favourites::GuiFavouritesList;
 use super::hero_facts::{GuiHeroCastMemberFrame, GuiHeroFactsFrame};
 use super::{GuiArtShapeFrame, GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
@@ -33,6 +35,9 @@ pub struct GuiEmbyList {
     pub collection_names: Vec<String>,
     /// Whether the library presents the feed-group mode (`feed_view_libraries`).
     pub feed_group: bool,
+    /// The destination's one active view (emby-favourites design D5): the
+    /// header's view dropdown marks it, and the Library Status bar reads it.
+    pub view: GuiLibraryView,
     /// Whether the active list has not landed yet.
     pub loading: bool,
     /// Whether the plain mode's root-list fetch failed.
@@ -43,6 +48,10 @@ pub struct GuiEmbyList {
     /// target a press names, its active sort, and the choices the library
     /// offers. The plain mode and the feed-group mode share it.
     pub sort: Option<GuiListSortFrame>,
+    /// The library's Favourites list (emby-favourites design D6): `Some` while
+    /// the destination's view is Favourites, and `None` otherwise, whose All
+    /// list paints.
+    pub favourites: Option<GuiFavouritesList>,
 }
 
 /// The plain Emby-library destination's detail part (`gui-change-driven-sections`
@@ -64,6 +73,19 @@ pub struct GuiEmbyDetail {
 pub enum GuiEmbyRowKindFrame {
     Collection,
     Media,
+}
+
+impl GuiEmbyRowKindFrame {
+    /// The row kind word the item row's hook paints (`data-library-<list>-row`):
+    /// the plain Emby list and the Favourites list carry the same two arms, so
+    /// the word is one fact of the kind.
+    #[must_use]
+    pub fn kind_word(self) -> &'static str {
+        match self {
+            Self::Collection => "collection",
+            Self::Media => "media",
+        }
+    }
 }
 
 /// One row of the plain Emby-library list (row 8.1). The row carries the
@@ -116,6 +138,9 @@ pub struct GuiEmbyHeroFrame {
     /// are not directors, in the order Emby gives. Empty when the item is
     /// not a movie or carries no people.
     pub cast: Vec<GuiHeroCastMemberFrame>,
+    /// The heart control's facts (emby-favourites design D10), present
+    /// exactly when the item supports favourites.
+    pub heart: Option<GuiHeroHeart>,
 }
 
 impl GuiEmbyList {
@@ -128,10 +153,15 @@ impl GuiEmbyList {
             collections: projection.collections.clone(),
             collection_names: projection.collection_names.clone(),
             feed_group: projection.feed_group,
+            view: projection.view,
             loading: projection.loading,
             failed: projection.failed,
             rows: projection.rows.iter().map(GuiEmbyRowFrame::from).collect(),
             sort: projection.sort.clone(),
+            favourites: projection
+                .favourites
+                .as_ref()
+                .map(GuiFavouritesList::from_projection),
         }
     }
 }
@@ -180,6 +210,7 @@ impl From<&GuiEmbyHero> for GuiEmbyHeroFrame {
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
             art: hero.art.as_ref().map(GuiArtRef::from),
             cast: hero.cast.iter().map(GuiHeroCastMemberFrame::from).collect(),
+            heart: hero.heart.clone(),
         }
     }
 }

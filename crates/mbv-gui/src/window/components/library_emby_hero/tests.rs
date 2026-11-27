@@ -82,6 +82,7 @@ fn row(label: GuiHeroFactLabelFrame, value: &str) -> GuiHeroFactRowFrame {
 /// no runtime row.
 fn movie_hero(art_shape: GuiArtShapeFrame) -> GuiEmbyHeroFrame {
     GuiEmbyHeroFrame {
+        heart: None,
         title: "Heat".to_owned(),
         facts: GuiHeroFactsFrame {
             pills: vec![
@@ -122,6 +123,7 @@ fn emby_library_list() -> GuiLibraryList {
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Emby(GuiEmbyList {
+            view: crate::gui_core::GuiLibraryView::All,
             lib_idx: LIB_IDX,
             library_name: "Movies".to_owned(),
             collections: None,
@@ -131,6 +133,7 @@ fn emby_library_list() -> GuiLibraryList {
             failed: false,
             rows: Vec::new(),
             sort: None,
+            favourites: None,
         }),
     }
 }

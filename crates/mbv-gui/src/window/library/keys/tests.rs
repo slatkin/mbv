@@ -426,11 +426,12 @@ fn shows_list() -> GuiLibraryList {
         destination: GuiDestinationList::Shows(GuiShowsList {
             sort: None,
             lib_idx: 0,
-            view: crate::gui_core::GuiShowsView::All,
+            view: crate::gui_core::GuiLibraryView::All,
             loading: false,
             series: Vec::new(),
             upcoming_failed: false,
             rows: Vec::new(),
+            favourites: None,
         }),
     }
 }

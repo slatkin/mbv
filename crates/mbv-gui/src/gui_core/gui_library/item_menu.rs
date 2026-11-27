@@ -122,7 +122,7 @@ impl GuiCore {
     /// the autoload rule), and a Home row takes the Home play and enqueue
     /// paths. The GUI never arms the TUI's `pending_overlay`.
     pub(super) fn run_gui_library_menu_entry(&mut self, row: &GuiLibraryMenuRow, index: usize) {
-        run_library_menu_entry(&mut self.app, &self.gui, row, index);
+        run_library_menu_entry(&mut self.app, &mut self.gui, row, index);
     }
 
     /// Shuffle the row (gui-row-hover-actions design D4): the row's hover
@@ -160,7 +160,7 @@ impl GuiCore {
 /// paths. The GUI never arms the TUI's `pending_overlay`.
 fn run_library_menu_entry(
     app: &mut App,
-    gui: &GuiClientState,
+    gui: &mut GuiClientState,
     row: &GuiLibraryMenuRow,
     index: usize,
 ) {
@@ -180,6 +180,26 @@ fn run_library_menu_entry(
         }
         (Some(ContextAction::Enqueue), GuiLibraryMenuTarget::Library { item, .. }) => {
             super::item_actions::add_library_item(app, gui, &item.id);
+        }
+        // A music artist row's Play All, Shuffle, and Enqueue fetch the
+        // artist's tracks through `get_artist_audio_tracks` (emby-favourites
+        // design D8), so no path sends `ParentId=<artist id>`: the row menu's
+        // folder actions run the artist path instead of the folder walk.
+        (Some(ContextAction::PlayFolder(_)), GuiLibraryMenuTarget::Library { item, .. })
+            if super::item_actions::is_music_artist(item) =>
+        {
+            super::favourites::play_favourite_artist(app, &item.id, false);
+        }
+        (Some(ContextAction::ShuffleFolder(_)), GuiLibraryMenuTarget::Library { item, .. })
+            if super::item_actions::is_music_artist(item) =>
+        {
+            super::favourites::play_favourite_artist(app, &item.id, true);
+        }
+        (
+            Some(ContextAction::EnqueueFolder(_)),
+            GuiLibraryMenuTarget::Library { lib_idx, item },
+        ) if super::item_actions::is_music_artist(item) => {
+            super::favourites::enqueue_favourite_artist(app, *lib_idx, &item.id);
         }
         (
             Some(ContextAction::Play),
@@ -201,11 +221,12 @@ fn run_library_menu_entry(
         }
         // The Continue Watching removal needs the row's item, as the TUI's
         // own Home menu passes it; every other Home action carries its own
-        // targets.
+        // targets. The stores ride the dispatch so a favourite write's landing
+        // flips this Client's own copies (emby-favourites design D4).
         (action, GuiLibraryMenuTarget::Home { item, .. }) => {
-            app.execute_context_action(action, Some(item.clone()));
+            app.execute_context_action_with_stores(action, Some(item.clone()), Some(gui));
         }
-        (action, _) => app.execute_context_action(action, None),
+        (action, _) => app.execute_context_action_with_stores(action, None, Some(gui)),
     }
 }
 

@@ -6,10 +6,12 @@
 //! position.
 
 use crate::gui_core::{
-    GuiListSortFrame, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection, GuiShowsRow,
-    GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsView, GuiShowsWorkspace,
+    GuiHeroHeart, GuiLibraryView, GuiListSortFrame, GuiShowsEpisodeRow, GuiShowsHero,
+    GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries,
+    GuiShowsWorkspace,
 };
 
+use super::favourites::GuiFavouritesList;
 use super::hero_facts::GuiHeroFactsFrame;
 use super::{GuiArtShapeFrame, GuiHomeRowStateFrame, GuiRowArtFrame, GuiRowMediaKindFrame};
 use crate::art::GuiArtRef;
@@ -24,9 +26,10 @@ pub struct GuiShowsList {
     /// The Shows library index the Shows commands name (design D2, D12):
     /// the library whose content this is.
     pub lib_idx: usize,
-    /// The one active view (design D8): All, New, or Upcoming. The header
+    /// The one active view (design D8; emby-favourites design D5): the
+    /// destination choice. The header
     /// paints the matching single-choice dropdown.
-    pub view: GuiShowsView,
+    pub view: GuiLibraryView,
     /// Whether the active list has not landed yet.
     pub loading: bool,
     /// The series list's tree (design D14): the series nodes with their
@@ -44,6 +47,9 @@ pub struct GuiShowsList {
     /// `Some` only while the view is New, whose list is the one the sort
     /// orders.
     pub sort: Option<GuiListSortFrame>,
+    /// The library's Favourites list (emby-favourites design D6): `Some` while
+    /// the view is Favourites, and `None` otherwise, whose All tree paints.
+    pub favourites: Option<GuiFavouritesList>,
 }
 
 /// The Shows destination's detail part (`gui-change-driven-sections` design
@@ -151,6 +157,9 @@ pub struct GuiShowsHeroFrame {
     /// The series Hero's Workspace; `None` on the Latest mode's episode Hero
     /// and while the selected series' detail has not landed.
     pub workspace: Option<GuiShowsWorkspaceFrame>,
+    /// The heart control's facts (emby-favourites design D10), present
+    /// exactly when the item supports favourites.
+    pub heart: Option<GuiHeroHeart>,
 }
 
 /// A series Hero's Workspace (design D12): the season pills and the selected
@@ -210,6 +219,10 @@ impl GuiShowsList {
                 .map(GuiShowsSeriesFrame::from)
                 .collect(),
             upcoming_failed: false,
+            favourites: projection
+                .favourites
+                .as_ref()
+                .map(GuiFavouritesList::from_projection),
         }
     }
 }
@@ -283,6 +296,7 @@ impl From<&GuiShowsHero> for GuiShowsHeroFrame {
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
             art: hero.art.as_ref().map(GuiArtRef::from),
             workspace: hero.workspace.as_ref().map(GuiShowsWorkspaceFrame::from),
+            heart: hero.heart.clone(),
         }
     }
 }

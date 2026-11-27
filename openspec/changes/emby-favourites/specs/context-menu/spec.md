@@ -38,11 +38,16 @@ Music tracks, albums, and artists SHALL NOT offer Mark Played or Mark
 Unplayed, either on a single row or in a multi-selection. mbv never resumes
 music and ignores music played state everywhere, so the entry would have no
 visible effect. This rule does not remove the favourites entry
-(capability `emby-favourites`), which music items offer.
+(capability `emby-favourites`), which music items outside a Grouped Music
+library offer.
 
-#### Scenario: Album menu
-- **WHEN** the user opens the context menu on a music album
+#### Scenario: Album menu outside a Grouped Music library
+- **WHEN** the user opens the context menu on a music album in a non-grouped music library
 - **THEN** the menu offers Play All, Shuffle, Enqueue, Add to Favourites, and no played-state entry
+
+#### Scenario: Album menu in a Grouped Music library
+- **WHEN** the user opens the context menu on a music album of a Grouped Music library
+- **THEN** the menu offers Play All, Shuffle, Enqueue, and no favourites entry
 
 #### Scenario: Mixed multi-selection with a track
 - **WHEN** a multi-selection holds a movie and a music track

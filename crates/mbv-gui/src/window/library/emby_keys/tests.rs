@@ -93,6 +93,7 @@ fn emby_content(
         ],
         current_tab: Some(3),
         destination: GuiDestinationList::Emby(GuiEmbyList {
+            view: crate::gui_core::GuiLibraryView::All,
             sort: None,
             lib_idx: 3,
             library_name: "Movies".to_owned(),
@@ -115,6 +116,7 @@ fn emby_content(
             loading: false,
             failed: false,
             rows: rows.to_owned(),
+            favourites: None,
         }),
     };
     let detail = GuiLibraryDetail::Emby(GuiEmbyDetail {

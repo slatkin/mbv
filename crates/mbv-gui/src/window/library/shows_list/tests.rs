@@ -99,7 +99,7 @@ fn the_series_list_paints_the_tree_at_the_music_heights() {
     let open = vec![series_row_id("s1"), season_row_id("s1", "se1")];
     let closed: Vec<String> = Vec::new();
     let painted = build_shows_rows(
-        GuiShowsView::All,
+        GuiLibraryView::All,
         &tree(),
         &[],
         "",
@@ -161,7 +161,7 @@ fn the_row_art_set_names_the_top_level_rows_alone() {
     let open = vec![series_row_id("s1"), season_row_id("s1", "se1")];
     let closed: Vec<String> = Vec::new();
     let tree = build_shows_rows(
-        GuiShowsView::All,
+        GuiLibraryView::All,
         &tree(),
         &[],
         "",
@@ -207,7 +207,7 @@ fn the_row_art_set_names_the_top_level_rows_alone() {
 #[test]
 fn a_closed_series_paints_no_season_and_a_closed_season_no_episode() {
     let closed = build_shows_rows(
-        GuiShowsView::All,
+        GuiLibraryView::All,
         &tree(),
         &[],
         "",
@@ -227,7 +227,7 @@ fn a_closed_series_paints_no_season_and_a_closed_season_no_episode() {
 #[test]
 fn the_filter_keeps_a_series_whose_season_matches_and_opens_it() {
     let painted = build_shows_rows(
-        GuiShowsView::All,
+        GuiLibraryView::All,
         &tree(),
         &[],
         "season 2",
@@ -248,7 +248,7 @@ fn the_filter_keeps_a_series_whose_season_matches_and_opens_it() {
 #[test]
 fn the_rail_holds_the_first_series_row_under_each_letter_and_disables_the_rest() {
     let rail = shows_letter_rail(&build_shows_rows(
-        GuiShowsView::All,
+        GuiLibraryView::All,
         &tree(),
         &[],
         "",
@@ -287,7 +287,13 @@ fn flat_row(id: &str, title: &str) -> GuiShowsRowFrame {
 #[test]
 fn the_flat_rows_paint_at_the_two_line_height() {
     let rows = vec![flat_row("n1", "Alfred"), flat_row("n2", "Bridgerton")];
-    let painted = build_shows_rows(GuiShowsView::New, &[], &rows, "", ShowsTreeState::default());
+    let painted = build_shows_rows(
+        GuiLibraryView::New,
+        &[],
+        &rows,
+        "",
+        ShowsTreeState::default(),
+    );
 
     let heights: Vec<f32> = painted.iter().map(GeometryRow::height).collect();
     assert_eq!(heights, [SHOWS_FLAT_ROW_HEIGHT, SHOWS_FLAT_ROW_HEIGHT]);

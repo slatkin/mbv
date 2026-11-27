@@ -323,6 +323,7 @@ pub fn parse_item(raw: &Value) -> EmbyItem {
         collection_type: raw["CollectionType"].as_str().unwrap_or("").to_string(),
         runtime_ticks: raw["RunTimeTicks"].as_i64().unwrap_or(0),
         played: ud["Played"].as_bool().unwrap_or(false),
+        is_favorite: ud["IsFavorite"].as_bool().unwrap_or(false),
         playback_position_ticks: ud["PlaybackPositionTicks"].as_i64().unwrap_or(0),
         series_id: raw["SeriesId"].as_str().unwrap_or("").to_string(),
         series_name: raw["SeriesName"].as_str().unwrap_or("").to_string(),

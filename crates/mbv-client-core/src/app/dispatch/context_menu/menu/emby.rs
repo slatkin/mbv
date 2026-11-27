@@ -54,7 +54,7 @@ impl App {
         let mut entries = Vec::new();
         if let Some(item) = current_item {
             if item.is_folder {
-                Self::push_folder_context_actions(&mut entries, item);
+                self.push_folder_context_actions(&mut entries, item);
             } else {
                 self.push_leaf_context_actions(
                     &mut entries,
@@ -206,7 +206,7 @@ impl App {
         Some((current_item, queue_cursor))
     }
 
-    fn push_folder_context_actions(entries: &mut Vec<ContextMenuEntry>, item: &EmbyItem) {
+    fn push_folder_context_actions(&self, entries: &mut Vec<ContextMenuEntry>, item: &EmbyItem) {
         Self::push_context_action(
             entries,
             "Play All",
@@ -223,6 +223,48 @@ impl App {
             ContextAction::EnqueueFolder(Box::new(item.clone())),
         );
         Self::push_play_state_context_action(entries, item);
+        self.push_favourite_context_action(entries, item);
+    }
+
+    /// The favourites entry (emby-favourites design D2): pushed after the
+    /// played-state entry — or after Enqueue when the item has no played-state
+    /// entry, as Music has none. It is single-row only: the builder never
+    /// builds a multi-selection favourites entry, and the Queue-focus path
+    /// never offers it, because the Owner holds queue items and a flipped
+    /// flag there would go stale with no ctrl variant to repair it. Only an
+    /// item whose type supports the per-user flag (`EmbyItem::
+    /// supports_favourite`, design D1) offers it.
+    fn push_favourite_context_action(&self, entries: &mut Vec<ContextMenuEntry>, item: &EmbyItem) {
+        if matches!(
+            self.effective_panel_focus(),
+            mbv_ui_model::settings::PanelFocus::Queue
+        ) || !item.supports_favourite()
+        {
+            return;
+        }
+        // A Grouped Music library is excluded from favourites everywhere
+        // (emby-favourites design D11): no row resolved inside one — artist,
+        // album, or track — offers the entry, while the same music item in a
+        // non-grouped music library, a mixed plain library, or Home keeps it.
+        if self
+            .context_menu_lib_idx()
+            .is_some_and(|lib_idx| self.is_grouped_music_library(lib_idx))
+        {
+            return;
+        }
+        if item.is_favorite {
+            Self::push_context_action(
+                entries,
+                "Remove from Favourites",
+                ContextAction::Unfavourite(item.id.clone()),
+            );
+        } else {
+            Self::push_context_action(
+                entries,
+                "Add to Favourites",
+                ContextAction::Favourite(item.id.clone()),
+            );
+        }
     }
 
     fn push_play_state_context_action(entries: &mut Vec<ContextMenuEntry>, item: &EmbyItem) {
@@ -273,6 +315,11 @@ impl App {
         // Music items (tracks, albums, artists) don't get a mark entry;
         // `push_play_state_context_action` enforces the music rule itself.
         Self::push_play_state_context_action(entries, item);
+        // The favourites entry follows the played-state entry, or Enqueue
+        // when the item has none (emby-favourites design D2, context-menu
+        // spec: a music track offers Add to Favourites with no played-state
+        // entry). The method skips the Queue-focus path itself.
+        self.push_favourite_context_action(entries, item);
         // `home_cw_selected` is the component-derived authoritative
         // fact (resolved at the Model boundary), replacing the deleted
         // numeric `App.home.section == 0` read. `cw_focused` (Library

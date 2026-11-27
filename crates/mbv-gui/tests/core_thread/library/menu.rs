@@ -103,6 +103,8 @@ fn the_row_menu_command_carries_the_items_full_menu_in_the_frame() {
         .iter()
         .map(|entry| entry.label.as_str())
         .collect();
+    // The favourites entry follows Enqueue: music has no played-state entry
+    // (emby-favourites delta, context-menu spec).
     assert_eq!(labels, ["Play All", "Shuffle", "Enqueue"],);
 }
 

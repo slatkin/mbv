@@ -5,7 +5,8 @@
 //! ([`GuiHomeDetail`]). The `libraryList` and `libraryDetail` sections carry them.
 
 use crate::gui_core::{
-    GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId, GuiHomeRowKind,
+    GuiHeroHeart, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
+    GuiHomeRowKind,
 };
 use mbv_queue::QueueItemContentId;
 use mbv_ui_model::media_list::{ActiveProgress, MediaSemanticState};
@@ -166,6 +167,9 @@ pub struct GuiHomeHeroFrame {
     /// are not directors, in the order Emby gives. Empty on every other
     /// item kind.
     pub cast: Vec<GuiHeroCastMemberFrame>,
+    /// The heart control's facts (emby-favourites design D10), present
+    /// exactly when the item supports favourites.
+    pub heart: Option<GuiHeroHeart>,
 }
 
 impl From<&GuiHomeRow> for GuiHomeRowFrame {
@@ -266,6 +270,7 @@ impl From<&GuiHomeHero> for GuiHomeHeroFrame {
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
             art: hero.art.as_ref().map(GuiArtRef::from),
             cast: hero.cast.iter().map(GuiHeroCastMemberFrame::from).collect(),
+            heart: hero.heart.clone(),
         }
     }
 }

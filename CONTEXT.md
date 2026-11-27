@@ -356,6 +356,10 @@ Upcoming premiere:
 An Emby announcement of a future episode. It shows in TV `Upcoming`. It is not a media item. It cannot play, enqueue, or show a Hero. Its only action opens its series.
 _Avoid_: upcoming episode, placeholder episode
 
+Favourite:
+The Emby per-user favourite flag on one item. The flag lives on the Emby server (`UserData.IsFavorite`), set and cleared through the user's favourite endpoints, and mbv mirrors it on every copy it holds. It is never an mbv-owned list, rating, or bookmark, and a library's Favourites view lists only that library's favourites.
+_Avoid_: star, like, bookmark
+
 Media-list row:
 The one painted fixed-height row of a `MediaList` flow in every Panel mode. Its left-aligned metadata slot carries a progress badge in the FOAM role. Its right-aligned gutter has one closed metadata role. It is a date or year in the green `STATUS_AVAILABLE` role, or a green duration on Queue rows.
 _Avoid_: wide media row, wide_media_row, left-aligned year slot

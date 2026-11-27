@@ -1,9 +1,9 @@
 //! The Library dropdown's shared presentation (gui-collection-dropdown design
 //! D6, D8): the accent-outlined trigger, the popover under it, and the rows
-//! that name one choice. The collection dropdown and the Shows view dropdown
+//! that name one choice. The collection dropdown and the view dropdown
 //! supply the label, the rows, the marker kind, and the handlers; this
 //! component owns no destination vocabulary and no selection rule. The
-//! collection dropdown keeps its filter field; the Shows view dropdown omits
+//! collection dropdown keeps its filter field; the view dropdown omits
 //! it, so a view press replaces the active entry and closes the popover.
 
 use dioxus_native::prelude::*;
@@ -47,7 +47,7 @@ pub struct LibraryDropdownRow {
 pub enum LibraryDropdownMarker {
     /// A square checkbox, used by the multi-choice collection dropdown.
     Check,
-    /// A round radio mark, used by the single-choice Shows view dropdown.
+    /// A round radio mark, used by the single-choice view dropdown.
     Radio,
 }
 
@@ -91,7 +91,7 @@ pub struct LibraryDropdownProps {
     pub on_toggle: Callback<()>,
     /// Select the row whose key the callback carries.
     pub on_select: Callback<String>,
-    /// Type into the filter field. The Shows view passes a no-op callback.
+    /// Type into the filter field. The view passes a no-op callback.
     pub on_filter: Callback<String>,
     /// A press that landed on the dropdown's own surface.
     pub on_inside_press: Callback<()>,

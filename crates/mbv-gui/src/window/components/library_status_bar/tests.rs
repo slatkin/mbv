@@ -312,6 +312,7 @@ fn an_armed_prefix_paints_and_keeps_the_location() {
 /// The carried plain Emby-library list part: one selected row.
 fn emby_content() -> (GuiDestinationList, GuiLibraryDetail) {
     let list = GuiDestinationList::Emby(GuiEmbyList {
+        view: crate::gui_core::GuiLibraryView::All,
         sort: None,
         lib_idx: 2,
         library_name: "Movies".to_owned(),
@@ -331,6 +332,7 @@ fn emby_content() -> (GuiDestinationList, GuiLibraryDetail) {
             kind: GuiEmbyRowKindFrame::Media,
             state: GuiHomeRowStateFrame::Ordinary,
         }],
+        favourites: None,
     });
     let detail = GuiLibraryDetail::Emby(GuiEmbyDetail {
         selected: Some("m1".to_owned()),

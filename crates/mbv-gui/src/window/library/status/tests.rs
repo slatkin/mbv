@@ -107,6 +107,7 @@ fn emby_plain() -> (GuiLibraryList, GuiLibraryDetail) {
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Emby(GuiEmbyList {
+            view: crate::gui_core::GuiLibraryView::All,
             sort: None,
             lib_idx: 2,
             library_name: "Movies".to_owned(),
@@ -119,6 +120,7 @@ fn emby_plain() -> (GuiLibraryList, GuiLibraryDetail) {
                 emby_row("m1", "Alien", Some('A')),
                 emby_row("m2", "Heat", Some('H')),
             ],
+            favourites: None,
         }),
     };
     let detail = GuiLibraryDetail::Emby(GuiEmbyDetail {
@@ -135,6 +137,7 @@ fn emby_feed() -> (GuiLibraryList, GuiLibraryDetail) {
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Emby(GuiEmbyList {
+            view: crate::gui_core::GuiLibraryView::All,
             sort: None,
             lib_idx: 2,
             library_name: "Movies".to_owned(),
@@ -170,6 +173,7 @@ fn emby_feed() -> (GuiLibraryList, GuiLibraryDetail) {
                 kind: GuiEmbyRowKindFrame::Media,
                 state: GuiHomeRowStateFrame::Ordinary,
             }],
+            favourites: None,
         }),
     };
     let detail = GuiLibraryDetail::Emby(GuiEmbyDetail {
@@ -276,6 +280,7 @@ fn home_content() -> (GuiLibraryList, GuiLibraryDetail) {
     let detail = GuiLibraryDetail::Home(GuiHomeDetail {
         selected: None,
         hero: Some(GuiHomeHeroFrame {
+            heart: None,
             title: "Better Call Saul".to_owned(),
             parent: None,
             facts: crate::bridge::frame::library::GuiHeroFactsFrame {
@@ -299,7 +304,7 @@ fn shows_content() -> (GuiLibraryList, GuiLibraryDetail) {
         current_tab: None,
         destination: GuiDestinationList::Shows(GuiShowsList {
             sort: None,
-            view: crate::gui_core::GuiShowsView::All,
+            view: crate::gui_core::GuiLibraryView::All,
             lib_idx: 0,
             loading: false,
             series: Vec::new(),
@@ -326,6 +331,7 @@ fn shows_content() -> (GuiLibraryList, GuiLibraryDetail) {
                     sort_letter: Some('B'),
                 },
             ],
+            favourites: None,
         }),
     };
     let detail = GuiLibraryDetail::Shows(GuiShowsDetail {
@@ -487,5 +493,37 @@ fn the_location_reads_the_shows_destination_and_the_selected_row() {
     assert_eq!(
         library_location(&[tab(3, "Shows")], Some(3), Some(&list), Some(&detail)),
         "Shows › The Bear"
+    );
+}
+
+// On a Shows library the Favourites view names Favourites between the
+// destination and the picked item (emby-favourites design D5, spec "A
+// Favourites view names Favourites").
+#[test]
+fn the_shows_favourites_view_names_favourites_in_place_of_the_view_segment() {
+    let (mut list, detail) = shows_content();
+    let GuiDestinationList::Shows(shows) = &mut list.destination else {
+        panic!("shows fixture");
+    };
+    shows.view = crate::gui_core::GuiLibraryView::FavouriteShows;
+    assert_eq!(
+        library_location(&[tab(3, "Shows")], Some(3), Some(&list), Some(&detail)),
+        "Shows › Favourite Shows › The Bear"
+    );
+}
+
+// On a plain Emby library the Favourites view names Favourites between the
+// destination and the picked item, where the plain mode paints no collection
+// names (emby-favourites design D5).
+#[test]
+fn the_plain_emby_favourites_view_names_favourites_in_place_of_the_view_segment() {
+    let (mut list, detail) = emby_plain();
+    let GuiDestinationList::Emby(emby) = &mut list.destination else {
+        panic!("emby fixture");
+    };
+    emby.view = crate::gui_core::GuiLibraryView::Favourites;
+    assert_eq!(
+        library_location(&[tab(2, "Movies")], Some(2), Some(&list), Some(&detail)),
+        "Movies › Favourites › Heat"
     );
 }

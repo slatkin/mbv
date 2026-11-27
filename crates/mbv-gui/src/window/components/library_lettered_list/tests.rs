@@ -456,6 +456,7 @@ fn emby_movies() -> Vec<GuiEmbyRowFrame> {
 /// The Emby list part in one mode over `rows` (row 8.1).
 fn emby_frame(feed_group: bool, rows: Vec<GuiEmbyRowFrame>) -> GuiEmbyList {
     GuiEmbyList {
+        view: crate::gui_core::GuiLibraryView::All,
         sort: None,
         lib_idx: 3,
         library_name: "Movies".to_owned(),
@@ -465,6 +466,7 @@ fn emby_frame(feed_group: bool, rows: Vec<GuiEmbyRowFrame>) -> GuiEmbyList {
         loading: false,
         failed: false,
         rows,
+        favourites: None,
     }
 }
 

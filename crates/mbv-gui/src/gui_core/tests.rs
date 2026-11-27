@@ -24,6 +24,7 @@ mod gui_library;
 mod gui_library_audiobooks;
 mod gui_library_emby;
 mod gui_library_ensure;
+mod gui_library_favourites;
 mod gui_library_feeds;
 mod gui_library_home;
 mod gui_library_podcasts;

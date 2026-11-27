@@ -13,7 +13,7 @@
 use dioxus_native::prelude::*;
 
 use crate::gui_core::GuiCollections;
-use crate::gui_core::{GuiCollectionTarget, GuiListSort, GuiShowsView, GuiSortTarget};
+use crate::gui_core::{GuiCollectionTarget, GuiLibraryView, GuiListSort, GuiSortTarget};
 
 use crate::bridge::frame::library::{
     GuiAudiobooksRowFrame, GuiCollectionsFrame as _, GuiEmbyRowFrame, GuiEntryRowFrame,
@@ -66,11 +66,11 @@ pub struct LibraryUiState {
     /// filter text the popover narrows its season rows by — the same
     /// `DropdownState` as the collection dropdown.
     pub shows_seasons: DropdownState,
-    /// The Shows view dropdown's open fact (gui-collection-dropdown design D8,
+    /// The view dropdown's open fact (gui-collection-dropdown design D8,
     /// gtds design D15): open while the All, New, and Upcoming rows paint
     /// under the trigger. The popover mounts no filter field, so its filter
     /// text is never read.
-    pub shows_view: DropdownState,
+    pub library_view: DropdownState,
     /// The top bar's destination dropdown's open fact (user request
     /// 2026-11-25): in the Mini arrangement the destination tabs paint as one
     /// dropdown. The popover mounts no filter field.
@@ -109,7 +109,7 @@ impl LibraryUiState {
             filter: String::new(),
             collections: DropdownState::default(),
             shows_seasons: DropdownState::default(),
-            shows_view: DropdownState::default(),
+            library_view: DropdownState::default(),
             destinations: DropdownState::default(),
             search_control: SearchControlState::default(),
             open_nodes: Vec::new(),
@@ -150,6 +150,10 @@ pub struct LibraryState {
     pub music_scroll: Signal<ListScroll>,
     /// The other destinations' scroll stores (`scroll.ts`'s module stores).
     pub scrolls: super::scroll::LibraryScrolls,
+    /// The Favourites view's own scroll and filter text, one per library
+    /// (emby-favourites design D6): the list keeps them apart from the
+    /// destination's All stores, so pressing All finds the All list as it was.
+    pub favourites_views: Signal<super::favourites::FavouritesViews>,
     /// The Home list's interaction state (`home.ts`'s `homeUi`).
     pub home_ui: Signal<super::home::HomeUiState>,
     /// The Emby list's interaction state (`emby.ts`'s `embyUi`).
@@ -236,6 +240,7 @@ impl LibraryState {
             ui: Signal::new(LibraryUiState::initial()),
             music_scroll: Signal::new(initial_list_scroll()),
             scrolls: super::scroll::LibraryScrolls::new(),
+            favourites_views: Signal::new(super::favourites::FavouritesViews::new()),
             home_ui: Signal::new(super::home::HomeUiState::initial()),
             emby_ui: Signal::new(super::emby::initial_emby_ui()),
             shows_ui: Signal::new(super::shows::ShowsUiState::initial()),
@@ -269,10 +274,22 @@ impl LibraryState {
         list.is_some()
     }
 
-    /// Whether the active destination's detail part paints a Hero: every
-    /// destination's detail carries a `hero`, `None` while none is picked.
+    /// Whether the active destination paints a Hero (design D4, D12;
+    /// emby-favourites design D6): every destination's detail carries a `hero`,
+    /// `None` while none is picked, and the Favourites view carries its picked
+    /// favourite's Hero on the list part instead — the same fact the panel's
+    /// paint side reads, so the key side opens and closes the overlay the pane
+    /// paints.
     #[must_use]
-    fn library_detail_has_hero(&self) -> bool {
+    fn library_paints_hero(&self) -> bool {
+        let favourites_hero = {
+            let list = self.sections.library_list.peek();
+            super::favourites::favourites_part(list.as_deref())
+                .is_some_and(|(_, part)| part.hero.is_some())
+        };
+        if favourites_hero {
+            return true;
+        }
         let detail = self.sections.library_detail.peek();
         match detail.as_deref() {
             Some(GuiLibraryDetail::Music(detail)) => detail.hero.is_some(),
@@ -376,13 +393,14 @@ impl LibraryState {
         }
     }
 
-    /// Select the Shows destination's one view (gui-collection-dropdown
-    /// design D8): the command names the library and the view. The dropdown's
-    /// own press handler closes the popover; this method sends only the
-    /// selection, so a caller that reuses the open state cannot send it twice.
-    pub fn select_shows_view(&self, lib_idx: usize, view: GuiShowsView) {
+    /// Select the destination's one view (gui-collection-dropdown design D8;
+    /// emby-favourites design D5): the command names the library and the
+    /// view. The dropdown's own press handler closes the popover; this method
+    /// sends only the selection, so a caller that reuses the open state
+    /// cannot send it twice.
+    pub fn select_library_view(&self, lib_idx: usize, view: GuiLibraryView) {
         self.link
-            .library(GuiLibraryCommand::ShowsSetView { lib_idx, view });
+            .library(GuiLibraryCommand::LibrarySetView { lib_idx, view });
     }
 
     /// Open or close the collection dropdown (design D7): a press on the trigger opens it when it is
@@ -415,28 +433,28 @@ impl LibraryState {
         self.write_dropdown(|ui| &mut ui.collections, |d| d.set_filter(filter));
     }
 
-    /// Open or close the Shows view dropdown (design D8, D15): a press on the trigger opens it when it is
+    /// Open or close the view dropdown (design D8, D15): a press on the trigger opens it when it is
     /// closed and closes it when it is open.
-    pub fn toggle_shows_view_dropdown(&self) {
+    pub fn toggle_library_view_dropdown(&self) {
         self.write_dropdown(
-            |ui| &mut ui.shows_view,
+            |ui| &mut ui.library_view,
             |d| if d.is_open() { d.close() } else { d.open() },
         );
     }
 
-    /// Close the Shows view dropdown (design D8, D15). A close while closed writes
+    /// Close the view dropdown (design D8, D15). A close while closed writes
     /// nothing: the every-press path calls this on each press, and a write
     /// would repaint the panel for no change.
-    pub fn close_shows_view_dropdown(&self) {
-        if self.shows_view_open() {
-            self.write_dropdown(|ui| &mut ui.shows_view, DropdownState::close);
+    pub fn close_library_view_dropdown(&self) {
+        if self.library_view_open() {
+            self.write_dropdown(|ui| &mut ui.library_view, DropdownState::close);
         }
     }
 
-    /// Whether the Shows view dropdown (design D8, D15) is open.
+    /// Whether the view dropdown (design D8, D15) is open.
     #[must_use]
-    pub fn shows_view_open(&self) -> bool {
-        self.ui.peek().shows_view.is_open()
+    pub fn library_view_open(&self) -> bool {
+        self.ui.peek().library_view.is_open()
     }
 
     /// Open or close the top bar's destination dropdown (the Mini
@@ -500,7 +518,7 @@ impl LibraryState {
     /// panel press bubbles to.
     pub fn close_dropdowns(&self) {
         self.close_collections_dropdown();
-        self.close_shows_view_dropdown();
+        self.close_library_view_dropdown();
         self.close_shows_seasons_dropdown();
         self.close_destinations_dropdown();
     }
@@ -587,15 +605,15 @@ impl LibraryState {
     /// a picked item, an arrangement that overlays rather than splits, and no
     /// dismissal since the row menu's View Detail. The Hero is the Music Hero, the Home Hero, the
     /// Shows Hero, or a plain Emby library's Hero (design D12), whichever
-    /// destination is active. Esc and a press on the backdrop close it. The
+    /// destination is active — or the Favourites Hero, which rides the list
+    /// part while that view paints (emby-favourites design D6). Esc and a press
+    /// on the backdrop close it. The
     /// `arrangement` is the one value the window hands both this predicate's
     /// caller and the panel's paint (design D4): the keys never read a report
     /// that may not have landed yet.
     #[must_use]
     pub fn hero_overlay_open(&self, ui: &LibraryUiState, arrangement: GuiArrangement) -> bool {
-        arrangement == GuiArrangement::Narrow
-            && !ui.hero_dismissed
-            && self.library_detail_has_hero()
+        arrangement == GuiArrangement::Narrow && !ui.hero_dismissed && self.library_paints_hero()
     }
 
     /// Open the destination tab at `position`: the command goes to the core,
@@ -611,7 +629,7 @@ impl LibraryState {
     /// `gui-pointer-target-interaction`): the core's default row is not a
     /// pick, so the Narrow arrangement shows the new destination's list and
     /// paints no overlay Hero, and an open row menu, item menu, collection
-    /// dropdown, Shows view dropdown, season dropdown, or collapsed Search
+    /// dropdown, view dropdown, season dropdown, or collapsed Search
     /// panel closes (gui-collection-dropdown design D7, D8: a destination
     /// change closes the dropdown and clears its filter).
     pub fn reset_for_destination(&self) {

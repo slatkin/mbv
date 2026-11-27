@@ -114,6 +114,9 @@ fn a_music_items_row_menu_leaves_out_the_played_toggle() {
         .map(|entry| entry.label.as_str())
         .collect();
     assert!(!labels.iter().any(|label| label.contains("Mark")));
+    // A Grouped Music library's rows offer no favourites entry either
+    // (emby-favourites design D11): the destination is excluded from
+    // favourites everywhere.
     assert_eq!(labels, ["Play", "Enqueue"]);
 }
 

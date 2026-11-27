@@ -44,6 +44,7 @@ fn selected() -> GuiHomeRowIdFrame {
 /// resume roles marked, and the overview text (design D12).
 fn hero(art_shape: GuiArtShapeFrame) -> GuiHomeHeroFrame {
     GuiHomeHeroFrame {
+        heart: None,
         title: "Better Call Saul".to_owned(),
         parent: None,
         facts: GuiHeroFactsFrame {

@@ -19,8 +19,8 @@ use mbv_ui_model::tab_selection::TabSelection;
 
 use super::collection::{GuiCollectionSet, GuiCollectionTarget};
 use super::collection_command::{CollectionOp, GuiCollectionSite};
+use super::library_view::GuiLibraryView;
 use super::list_sort::GuiListSort;
-use super::shows_view::GuiShowsView;
 use super::tabs::GuiDestinationKind;
 use super::{
     GuiEmbyFeedCollectionSite, GuiFeedsCollectionSite, GuiMusicCollectionSite,
@@ -127,8 +127,8 @@ impl GuiCore {
             let GuiDestinationKind::Shows { lib_idx } = kind else {
                 continue;
             };
-            if !self.gui.shows_views.contains_key(&lib_idx) {
-                self.set_gui_shows_view(lib_idx, shows_view(view));
+            if !self.gui.library_views.contains_key(&lib_idx) {
+                self.set_gui_library_view(lib_idx, library_view(view));
             }
         }
     }
@@ -152,7 +152,7 @@ impl GuiCore {
                 })
         });
         shows.map_or(GuiLaunchShowsView::All, |lib_idx| {
-            launch_shows_view(super::shows::shows_view(&self.gui, lib_idx))
+            launch_shows_view(super::library_view::library_view(&self.gui, lib_idx))
         })
     }
 
@@ -628,21 +628,25 @@ fn date_sort(order: GuiLaunchDateOrder) -> GuiListSort {
     }
 }
 
-/// The on-disk form of the Shows view (design D14).
-fn launch_shows_view(view: GuiShowsView) -> GuiLaunchShowsView {
+/// The on-disk form of the Shows view (design D14): a Favourites choice does
+/// not survive a restart, so it saves as All (emby-favourites design D5).
+fn launch_shows_view(view: GuiLibraryView) -> GuiLaunchShowsView {
     match view {
-        GuiShowsView::All => GuiLaunchShowsView::All,
-        GuiShowsView::New => GuiLaunchShowsView::New,
-        GuiShowsView::Upcoming => GuiLaunchShowsView::Upcoming,
+        GuiLibraryView::All
+        | GuiLibraryView::Favourites
+        | GuiLibraryView::FavouriteShows
+        | GuiLibraryView::FavouriteEpisodes => GuiLaunchShowsView::All,
+        GuiLibraryView::New => GuiLaunchShowsView::New,
+        GuiLibraryView::Upcoming => GuiLaunchShowsView::Upcoming,
     }
 }
 
 /// The core form of the saved Shows view.
-fn shows_view(view: GuiLaunchShowsView) -> GuiShowsView {
+fn library_view(view: GuiLaunchShowsView) -> GuiLibraryView {
     match view {
-        GuiLaunchShowsView::All => GuiShowsView::All,
-        GuiLaunchShowsView::New => GuiShowsView::New,
-        GuiLaunchShowsView::Upcoming => GuiShowsView::Upcoming,
+        GuiLaunchShowsView::All => GuiLibraryView::All,
+        GuiLaunchShowsView::New => GuiLibraryView::New,
+        GuiLaunchShowsView::Upcoming => GuiLibraryView::Upcoming,
     }
 }
 

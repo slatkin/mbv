@@ -35,6 +35,7 @@ use crate::window::sections::Sections;
 /// with no pills, rows, sections, or backdrop carried.
 fn props() -> LibraryHeroFrameProps {
     LibraryHeroFrameProps {
+        header_action: None,
         attr: "abs",
         root: "data-library-abs-hero",
         header: HeroHeader {

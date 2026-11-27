@@ -426,6 +426,11 @@
           "format": "int64",
           "type": "integer"
         },
+        "is_favorite": {
+          "default": false,
+          "description": "The item's per-user favourite flag (`UserData.IsFavorite`). `Default`\nso legacy serialized queue items (which predate the field) deserialize\nunchanged as not favourite; an older Owner ignores the field on decode.",
+          "type": "boolean"
+        },
         "is_folder": {
           "type": "boolean"
         },

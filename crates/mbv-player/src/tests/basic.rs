@@ -40,6 +40,7 @@ pub(crate) fn make_media_item(id: &str) -> mbv_emby_model::EmbyItem {
         collection_type: String::new(),
         runtime_ticks: 3600 * mbv_emby_model::TICKS_PER_SECOND,
         played: false,
+        is_favorite: false,
         playback_position_ticks: 0,
         series_id: "series1".into(),
         series_name: "Show".into(),

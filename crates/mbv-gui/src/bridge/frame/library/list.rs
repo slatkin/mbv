@@ -4,8 +4,8 @@
 //! rides `libraryDetail` (see `detail.rs`).
 
 use super::{
-    GuiAudiobooksList, GuiCollections, GuiEmbyList, GuiFeedsList, GuiHomeList, GuiLibraryTabFrame,
-    GuiMusicList, GuiPodcastsList, GuiShowsList,
+    GuiAudiobooksList, GuiCollections, GuiEmbyList, GuiFavouritesList, GuiFeedsList, GuiHomeList,
+    GuiLibraryTabFrame, GuiMusicList, GuiPodcastsList, GuiShowsList,
 };
 
 /// The Library list section (design D8): the destination tabs, the tab the top
@@ -71,17 +71,24 @@ impl GuiDestinationList {
 
     /// The destination's row count for the log (`sections::log_built`): the
     /// rows the list paints — Music's artists, every other destination's
-    /// rows.
+    /// rows, and a Favourites view's own rows while it paints
+    /// (emby-favourites design D6).
     #[must_use]
     pub fn rows(&self) -> usize {
         match self {
             Self::Music(list) => list.artists.len(),
             Self::Home(list) => list.rows.len(),
-            Self::Shows(list) => list.rows.len(),
-            Self::Emby(list) => list.rows.len(),
+            Self::Shows(list) => painted_rows(list.favourites.as_ref(), list.rows.len()),
+            Self::Emby(list) => painted_rows(list.favourites.as_ref(), list.rows.len()),
             Self::Audiobooks(list) => list.rows.len(),
             Self::Podcasts(list) => list.rows.len(),
             Self::Feeds(list) => list.rows.len(),
         }
     }
+}
+
+/// The rows one destination paints: the Favourites list's own rows while that
+/// list is carried, else the destination's (emby-favourites design D6).
+fn painted_rows(favourites: Option<&GuiFavouritesList>, own: usize) -> usize {
+    favourites.map_or(own, |favourites| favourites.rows.len())
 }

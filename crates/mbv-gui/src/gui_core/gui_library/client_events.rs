@@ -1,7 +1,7 @@
 //! The GUI Library's Client-only fetch results (design D5, D8): the group's
-//! album list, a plain Emby library's root list, and a Shows library's New
-//! episodes. Only the GUI Client starts these fetches, so their results never
-//! cross the shared library event channel. Each worker sends on the channel
+//! album list, a plain Emby library's root list, a Shows library's New
+//! episodes, and an Emby library's favourites. Only the GUI Client starts these
+//! fetches, so their results never cross the shared library event channel. Each worker sends on the channel
 //! `GuiCore` owns, and the GUI's tick drains it in
 //! `ClientTickHost::drain_client_events` after `drain_lib_events`, waking the
 //! tick with the same `ClientWaker`.
@@ -72,6 +72,16 @@ pub fn install_client_event(
             gui.shows_new.insert(library_id, landed);
             ClientEventLanding::Installed
         }
+        LibraryFetchEvent::Favourites { library_id, result } => {
+            let refreshing = gui.favourites_refreshing.remove(&library_id);
+            let failed = result.is_err();
+            let landed = favourites_request(result);
+            if refreshing && failed {
+                return ClientEventLanding::RefreshFailed;
+            }
+            gui.favourites.insert(library_id, landed);
+            ClientEventLanding::Installed
+        }
     }
 }
 
@@ -111,6 +121,28 @@ fn emby_roots_mark(
                 "the library's root list failed to load"
             );
             GuiEmbyRootItems::Failed
+        }
+    }
+}
+
+/// Land one Emby library's favourites fetch (emby-favourites design D6):
+/// success and failure both land the request, so a failed first load paints an
+/// empty list and no frame starts the same fetch again. A failed in-place
+/// refresh keeps the rows the store already held, which the caller decides
+/// from `RefreshFailed`.
+fn favourites_request(
+    result: Result<Vec<EmbyItem>, mbv_emby::EmbyError>,
+) -> GuiSectionRequest<EmbyItem> {
+    match result {
+        Ok(items) => GuiSectionRequest::landed(items),
+        Err(error) => {
+            tracing::info!(
+                name: "gui_library.favourites.failed",
+                target: "gui_library",
+                error = %error,
+                "the library's favourites failed to load"
+            );
+            GuiSectionRequest::landed(Vec::new())
         }
     }
 }

@@ -7,7 +7,9 @@
 //! open a destination, and the Library keys run while the pointer rests over
 //! the Library column. Every other key goes to the core.
 
-use crate::bridge::frame::library::{GuiDestinationList, GuiHomeRowIdFrame, GuiSearchFrame};
+use crate::bridge::frame::library::{
+    GuiDestinationList, GuiHomeRowIdFrame, GuiLibraryList, GuiSearchFrame,
+};
 use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
 use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
@@ -37,6 +39,17 @@ fn destination_place(key: &DomKey) -> Option<usize> {
 /// destination's own resolve, in the same order `routePanelKey` hands keys
 /// over.
 fn close_active_filter(state: &LibraryState) {
+    // The Favourites view's filter text is the list's own (emby-favourites
+    // design D6), so Esc clears it and leaves the destination's All filter as
+    // it was.
+    let favourites = {
+        let list = state.sections.library_list.peek();
+        crate::window::library::favourites::favourites_site(list.as_deref())
+    };
+    if let Some(site) = favourites {
+        state.close_favourites_filter(site.lib_idx());
+        return;
+    }
     let list = state.sections.library_list.peek();
     match list.as_ref().map(|list| &list.destination) {
         Some(GuiDestinationList::Home(_)) => state.close_home_filter(),
@@ -102,13 +115,13 @@ fn route_collections_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyO
     types_into_filter(key).then_some(KeyOutcome::Text)
 }
 
-/// Route a key while the Shows view dropdown is open (gui-collection-dropdown
+/// Route a key while the view dropdown is open (gui-collection-dropdown
 /// design D8, gtds design D15): Esc closes it. The popover mounts no filter
 /// field, so every other key passes to the rest of the routing and stays the
 /// panel's and the core's.
-fn route_shows_view_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
+fn route_library_view_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
     if key.key == "Escape" && bare(key) {
-        state.close_shows_view_dropdown();
+        state.close_library_view_dropdown();
         return Some(KeyOutcome::Handled);
     }
     None
@@ -138,18 +151,18 @@ fn route_seasons_open_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutco
 /// Route a key while an open text field of the panel holds the keyboard (design
 /// D3, step 2; gui-collection-dropdown design D7, D8): the list's `/` filter
 /// takes every key, the collection dropdown's own filter takes the typed keys,
-/// Backspace, and Esc, and the Shows view popover takes Esc — everywhere the
+/// Backspace, and Esc, and the view popover takes Esc — everywhere the
 /// pointer is. `None` while no field or popover of the panel is open, so the
 /// rest of the routing answers the key.
 fn route_open_field_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome> {
     // The facts are copied out of the store: a route may write it, and a held
     // read would meet that write.
-    let (filter_open, collections_open, shows_view_open, seasons_open, destinations_open) = {
+    let (filter_open, collections_open, library_view_open, seasons_open, destinations_open) = {
         let ui = state.ui.peek();
         (
             ui.filter_open,
             ui.collections.is_open(),
-            ui.shows_view.is_open(),
+            ui.library_view.is_open(),
             ui.shows_seasons.is_open(),
             ui.destinations.is_open(),
         )
@@ -160,8 +173,8 @@ fn route_open_field_key(state: &LibraryState, key: &DomKey) -> Option<KeyOutcome
     if collections_open {
         return route_collections_open_key(state, key);
     }
-    if shows_view_open {
-        return route_shows_view_open_key(state, key);
+    if library_view_open {
+        return route_library_view_open_key(state, key);
     }
     if seasons_open {
         return route_seasons_open_key(state, key);
@@ -259,6 +272,7 @@ fn hovered_item_id(state: &LibraryState, pointer: &PointerTarget) -> Option<Stri
         PointerList::Tracklist => Some(row.to_owned()),
         PointerList::Home
         | PointerList::Shows
+        | PointerList::Favourites
         | PointerList::Emby
         | PointerList::Audiobooks
         | PointerList::Podcasts
@@ -371,6 +385,40 @@ fn route_search_key(
     }
 }
 
+/// Route the key a Favourites row takes (emby-favourites design D6): the
+/// movement keys step the painting list's own scroll — the active site's, the
+/// one library whose view is a favourites view — Enter plays the row's item,
+/// and `a` queues it, both through the shared item commands the list's own
+/// press and double-click run. `None` for every other key and while no
+/// favourites view paints, so the destination's routing answers the rest.
+fn route_favourites_row_key(
+    state: &LibraryState,
+    key: &DomKey,
+    pointer: &PointerTarget,
+    list: Option<&GuiLibraryList>,
+) -> Option<KeyOutcome> {
+    if !bare(key) {
+        return None;
+    }
+    let site = crate::window::library::favourites::favourites_site(list)?;
+    if let Some(mv) = cursor_move(&key.key) {
+        state.step_favourites_scroll(site.lib_idx(), mv);
+        return Some(KeyOutcome::Handled);
+    }
+    let item_id = pointer.row.as_deref()?;
+    match key.key.as_str() {
+        "Enter" => {
+            state.play_library_item(item_id);
+            Some(KeyOutcome::Handled)
+        }
+        "a" => {
+            state.queue_library_item(item_id);
+            Some(KeyOutcome::Handled)
+        }
+        _ => None,
+    }
+}
+
 /// Route a key to the active destination's keys (design D2, step 3): the
 /// control the pointer marks acts on it. On Home the Home keys route (design
 /// D12), on a plain Emby library the Emby keys (row 8.1), and the Shows,
@@ -384,6 +432,17 @@ fn route_panel_key(
     pointer: &PointerTarget,
 ) -> KeyOutcome {
     let list = sections.library_list.peek();
+    // The Favourites list's rows carry stable Service ids (emby-favourites
+    // design D6), so the keys the pointer over it takes are uniform across the
+    // destinations that paint it: the movements step the list's own scroll,
+    // Enter plays the row, and `a` queues it. Every other key falls through
+    // to the destination's own routing, whose row resolution answers nothing
+    // for it — Right and Left stay the no-ops a flat list makes them.
+    if pointer.list == Some(PointerList::Favourites)
+        && let Some(outcome) = route_favourites_row_key(state, key, pointer, list.as_deref())
+    {
+        return outcome;
+    }
     match list.as_ref().map(|list| &list.destination) {
         Some(GuiDestinationList::Home(_)) => route_home_panel_key(state, key, pointer),
         Some(GuiDestinationList::Emby(_)) => {

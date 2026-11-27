@@ -18,16 +18,23 @@ change follows that behaviour instead of inventing a model.
 - The Emby client gains the write: `POST /Users/{id}/FavoriteItems/{itemId}` to set and
   `POST /Users/{id}/FavoriteItems/{itemId}/Delete` to clear, as the Emby web client sends them.
 - `EmbyItem` carries `UserData.IsFavorite`.
-- The GUI Shows view dropdown (All, New, Upcoming) gains a fourth entry, **Favourites**. Every
-  other Emby library destination in the GUI (plain libraries such as Movies, and Music) gains a
-  new view dropdown with All and Favourites. Favourites lists that library's favourites only:
-  collections first (Series, BoxSet, MusicArtist, MusicAlbum), then media items (Episode, Movie,
-  Audio, Video), each group in Title order. TV therefore shows Series and Episodes, as Emby's TV
-  Favorites tab does.
+- The GUI Shows view dropdown (All, New, Upcoming) gains two entries, **Favourite Shows** and
+  **Favourite Episodes**, as Emby's TV Favorites tab separates them. Favourite Shows lists the
+  library's favourite Series in Title order; Favourite Episodes lists its favourite Episodes in
+  Title order. Every other non-music Emby library destination in the GUI (plain libraries such
+  as Movies) gains a new view dropdown with All and Favourites. Favourites lists that library's
+  favourites only: collections first (Series, BoxSet, MusicArtist, MusicAlbum), then media items
+  (Episode, Movie, Audio, Video), each group in Title order.
+- A Grouped Music library is excluded entirely: it gains no view dropdown, no favourites entry
+  on any of its rows, and no Hero heart. A music library that is not grouped (a plain-level
+  music library) is not excluded.
+- Every non-music Emby Hero gains a heart control in its upper right that shows the item's
+  favourite state and toggles it through the same write as the menu entry.
 - No cross-library favourites section exists. Home paints none.
 
 Out of scope: a favourite mark on rows, bulk (multi-selection) favouriting, favourite entries on
-Queue rows, a favourites entry on the grouped Music tree's artist rows, favouriting Persons,
+Queue rows, any favourites affordance on a Grouped Music library (its view dropdown, its rows'
+menus, and its Heroes), favouriting Persons,
 Live TV channels, and Audiobookshelf or Feed items, and following a favourite change made by
 another client before the next refetch.
 
@@ -42,8 +49,9 @@ another client before the next refetch.
 
 - `context-menu`: the standard action set gains the favourites entry after the played-state entry;
   three scenarios that list a full menu gain the entry.
-- `gui-client`: the Shows view dropdown has four entries; every other Emby library destination has
-  an All/Favourites view dropdown.
+- `gui-client`: the Shows view dropdown has five entries; every non-music Emby library
+  destination has an All/Favourites view dropdown; a Grouped Music library paints no view
+  dropdown. Non-music Emby Heroes carry the heart control.
 
 ## Impact
 
@@ -56,7 +64,8 @@ another client before the next refetch.
   TUI gains no Favourites view.
 - `mbv-gui`: the generalised library view type and dropdown, the favourites store, projection,
   frame part, list component, and Hero/play/enqueue/menu resolution for favourite rows.
-- `mbv-config`: the GUI launch state keeps writing Shows views as before; Favourites is never
-  persisted.
-- No ctrl protocol change and no Owner change: the write is a Service call from the Client, as
-  Mark Played is today.
+- `mbv-config`: the GUI launch state keeps writing Shows views as before; no Favourites view is
+  ever persisted.
+- No Owner change: the write is a Service call from the Client, as Mark Played is today. The
+  ctrl v10 schema additively carries `is_favorite` on queue items, because queue items serialize
+  `EmbyItem`; it is not a protocol behaviour change.

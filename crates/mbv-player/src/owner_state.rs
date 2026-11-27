@@ -255,6 +255,7 @@ mod tests {
             collection_type: String::new(),
             runtime_ticks: 100 * mbv_emby_model::TICKS_PER_SECOND,
             played: false,
+            is_favorite: false,
             playback_position_ticks: 0,
             series_id: String::new(),
             series_name: String::new(),

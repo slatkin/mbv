@@ -102,12 +102,13 @@ fn shows_list(series: Vec<GuiShowsSeriesFrame>) -> GuiLibraryList {
         current_tab: Some(2),
         destination: GuiDestinationList::Shows(GuiShowsList {
             sort: None,
-            view: crate::gui_core::GuiShowsView::All,
+            view: crate::gui_core::GuiLibraryView::All,
             lib_idx: 0,
             loading: false,
             series,
             upcoming_failed: false,
             rows: Vec::new(),
+            favourites: None,
         }),
     }
 }

@@ -275,6 +275,51 @@ impl EmbyClient {
             .unwrap_or_default())
     }
 
+    /// The Favourites list for one library (emby-favourites design D6): the
+    /// library's `Items` query scoped to the `IsFavorite` filter, plus — for a
+    /// Music library — the library's favourited artists from `/Artists`,
+    /// merged by item id (one row per id). Items whose type cannot carry the
+    /// favourite flag (`EmbyItem::supports_favourite`) are dropped, so a
+    /// favourited Season never reaches the list.
+    pub fn get_favourites(
+        &self,
+        library_id: &str,
+        music: bool,
+    ) -> Result<Vec<EmbyItem>, crate::EmbyError> {
+        let mut items = self.fetch_items(
+            &format!(
+                "/Users/{}/Items",
+                mbv_net::encode_path_segment(&self.user_id)
+            ),
+            &[
+                ("ParentId", library_id),
+                ("Recursive", "true"),
+                ("Filters", "IsFavorite"),
+                ("Fields", LATEST_FIELDS),
+            ],
+        )?;
+        if music {
+            let artists = self.fetch_items(
+                "/Artists",
+                &[
+                    ("UserId", &self.user_id),
+                    ("ParentId", library_id),
+                    ("Filters", "IsFavorite"),
+                    ("Fields", "UserData"),
+                ],
+            )?;
+            let known: std::collections::HashSet<String> =
+                items.iter().map(|item| item.id.clone()).collect();
+            for artist in artists {
+                if !known.contains(&artist.id) {
+                    items.push(artist);
+                }
+            }
+        }
+        items.retain(EmbyItem::supports_favourite);
+        Ok(items)
+    }
+
     pub fn get_latest_episodes(
         &self,
         parent_id: &str,
@@ -403,13 +448,17 @@ impl EmbyClient {
     /// Fetches one artist's Audio tracks via Emby's
     /// `ArtistIds=<id>&IncludeItemTypes=Audio&Recursive=true` query.
     ///
-    /// `artist_id` must be a stable artist item ID resolved from an
+    /// `artist_id` is a stable artist item ID: either one resolved from an
     /// `ArtistItems` pair carried on an album/item payload (see
-    /// [`EmbyItem::matched_artist_item_id`]). That payload ID space is the
-    /// sole accepted input: mbv performs no `/Artists` listing fetch, and
-    /// IDs from such a listing have no proven equivalence to these keys, so
-    /// they are never valid here. Unsupported or rejected queries propagate
-    /// as `Err` and the caller falls back to per-album aggregation.
+    /// [`EmbyItem::matched_artist_item_id`]), or one a `/Artists` listing
+    /// returned. The two id spaces are the same one: the emby-favourites
+    /// design's read-only probe of the user's server (4.10.2.0) answered
+    /// `531595` and `590889` as "Metallica" from both an album payload's
+    /// `ArtistItems` and the library's `/Artists?Filters=IsFavorite`
+    /// listing, so a favourite artist row's id addresses this query. A library
+    /// can hold several artist items with one name, and each keeps its own
+    /// id. Unsupported or rejected queries propagate as `Err` and the caller
+    /// falls back to per-album aggregation.
     pub fn get_artist_audio_tracks(
         &self,
         artist_id: &str,
@@ -442,6 +491,31 @@ impl EmbyClient {
         ))
         .call()?;
         Ok(())
+    }
+
+    /// Sets or clears the item's per-user favourite flag, mirroring the
+    /// official Emby web client's write (emby-favourites design D3): a POST
+    /// to `/Users/{uid}/FavoriteItems/{id}` to set and a POST to
+    /// `.../{id}/Delete` to clear — no HTTP `DELETE`, which the web client
+    /// does not send. Returns the `IsFavorite` the reply's `UserItemDataDto`
+    /// carries.
+    pub fn set_favourite(&self, item_id: &str, favourite: bool) -> Result<bool, crate::EmbyError> {
+        let path = if favourite {
+            format!(
+                "/Users/{}/FavoriteItems/{}",
+                mbv_net::encode_path_segment(&self.user_id),
+                mbv_net::encode_path_segment(item_id)
+            )
+        } else {
+            format!(
+                "/Users/{}/FavoriteItems/{}/Delete",
+                mbv_net::encode_path_segment(&self.user_id),
+                mbv_net::encode_path_segment(item_id)
+            )
+        };
+        let mut resp = self.post(&path).send_empty()?;
+        let ud: Value = resp.body_mut().read_json()?;
+        Ok(ud["IsFavorite"].as_bool().unwrap_or(false))
     }
 
     pub fn hide_from_resume(&self, item_id: &str) -> Result<(), crate::EmbyError> {
