@@ -110,20 +110,29 @@ fn touch_in_view_row_images(
 fn row_art_scope(app: &App, gui: &GuiClientState) -> Option<GuiRowArtScope> {
     match super::tabs::active_destination(app)? {
         super::GuiDestinationKind::Home => Some(GuiRowArtScope::Home),
-        super::GuiDestinationKind::Music { .. } => Some(GuiRowArtScope::Music),
+        super::GuiDestinationKind::Music { lib_idx } => Some(if paints_favourites(gui, lib_idx) {
+            GuiRowArtScope::Favourites
+        } else {
+            GuiRowArtScope::Music
+        }),
         super::GuiDestinationKind::Shows { lib_idx } => {
             Some(match super::shows::library_view(gui, lib_idx) {
                 super::GuiLibraryView::New => GuiRowArtScope::ShowsNew,
                 super::GuiLibraryView::Upcoming => GuiRowArtScope::ShowsUpcoming,
-                // The Favourites list's own scope arrives with its list
-                // component (emby-favourites design D6, unit 5.1), so the All
-                // tree's scope stands in beside All and no fetch names it.
-                super::GuiLibraryView::All | super::GuiLibraryView::Favourites => {
-                    GuiRowArtScope::ShowsSeries
-                }
+                // The Favourites view paints the favourites list in place of
+                // the series tree, so its rows are the list's own
+                // (emby-favourites design D6).
+                super::GuiLibraryView::Favourites => GuiRowArtScope::Favourites,
+                super::GuiLibraryView::All => GuiRowArtScope::ShowsSeries,
             })
         }
-        super::GuiDestinationKind::Library { .. } => Some(GuiRowArtScope::Emby),
+        super::GuiDestinationKind::Library { lib_idx } => {
+            Some(if paints_favourites(gui, lib_idx) {
+                GuiRowArtScope::Favourites
+            } else {
+                GuiRowArtScope::Emby
+            })
+        }
         super::GuiDestinationKind::Audiobooks { .. } => Some(GuiRowArtScope::Audiobooks),
         super::GuiDestinationKind::Podcasts { .. } => Some(GuiRowArtScope::Podcasts),
         super::GuiDestinationKind::Feeds => Some(GuiRowArtScope::Feeds),
@@ -140,17 +149,12 @@ fn row_source(
 ) -> Option<GuiRowSource> {
     match scope {
         GuiRowArtScope::Home => home_row_source(app, id),
-        GuiRowArtScope::Emby => {
-            let lib_idx = active_library_index(app)?;
-            emby_row_source(&super::emby_projection::emby_item(app, gui, lib_idx, id)?)
-        }
+        GuiRowArtScope::Emby => emby_list_row_source(app, gui, id),
         GuiRowArtScope::Music => music_row_source(app, id),
         GuiRowArtScope::ShowsSeries => emby_row_source(&shows_series_item(app, id)?),
-        GuiRowArtScope::ShowsNew => {
-            let lib_idx = active_shows_library_index(app)?;
-            emby_row_source(&super::shows_projection::shows_item(app, gui, lib_idx, id)?)
-        }
+        GuiRowArtScope::ShowsNew => shows_new_row_source(app, gui, id),
         GuiRowArtScope::ShowsUpcoming => upcoming_row_source(app, id),
+        GuiRowArtScope::Favourites => favourites_row_source(app, gui, id),
         GuiRowArtScope::Podcasts => podcast_row_source(app, id),
         GuiRowArtScope::Audiobooks => {
             let lib_idx = super::audiobooks_projection::audiobooks_destination(app)?;
@@ -168,6 +172,29 @@ fn row_source(
             feed_row_source(entry)
         }
     }
+}
+
+/// The row art source of a plain Emby library list row (design D5): the active
+/// library's own item, as the list's projection builds it.
+fn emby_list_row_source(app: &App, gui: &GuiClientState, id: &str) -> Option<GuiRowSource> {
+    let lib_idx = active_library_index(app)?;
+    emby_row_source(&super::emby_projection::emby_item(app, gui, lib_idx, id)?)
+}
+
+/// The row art source of a Shows New row (design D5): the row's own latest
+/// episode, as the New list's projection builds it.
+fn shows_new_row_source(app: &App, gui: &GuiClientState, id: &str) -> Option<GuiRowSource> {
+    let lib_idx = active_shows_library_index(app)?;
+    emby_row_source(&super::shows_projection::shows_item(app, gui, lib_idx, id)?)
+}
+
+/// The row art source of a Favourites row (emby-favourites design D6): the
+/// active Emby destination's favourite item, resolved through the same store
+/// the list's own commands read.
+fn favourites_row_source(app: &App, gui: &GuiClientState, id: &str) -> Option<GuiRowSource> {
+    let lib_idx = active_emby_library_index(app)?;
+    let library_id = app.emby_library_id(lib_idx)?;
+    emby_row_source(&super::favourites::favourites_item(gui, library_id, id)?)
 }
 
 /// The row art source of a Music artist row (design D5): a Service artist's
@@ -235,6 +262,28 @@ pub(in crate::gui_core::gui_library) fn shows_series_item(
         .flat_map(|level| level.items.iter())
         .find(|item| item.id == series_id && item.item_type == "Series")
         .cloned()
+}
+
+/// Whether `lib_idx`'s destination paints the Favourites view (emby-favourites
+/// design D5): the Music and plain Emby destinations paint it in place of their
+/// own list, so their in-view rows are the favourites list's.
+fn paints_favourites(gui: &GuiClientState, lib_idx: usize) -> bool {
+    super::shows::library_view(gui, lib_idx) == super::GuiLibraryView::Favourites
+}
+
+/// The active destination's Emby library index, whichever of the three
+/// destinations that paint a Favourites view holds the window (emby-favourites
+/// design D6): the library whose store resolves the list's row ids.
+fn active_emby_library_index(app: &App) -> Option<usize> {
+    match super::tabs::active_destination(app)? {
+        super::GuiDestinationKind::Music { lib_idx }
+        | super::GuiDestinationKind::Shows { lib_idx }
+        | super::GuiDestinationKind::Library { lib_idx } => Some(lib_idx),
+        super::GuiDestinationKind::Home
+        | super::GuiDestinationKind::Audiobooks { .. }
+        | super::GuiDestinationKind::Podcasts { .. }
+        | super::GuiDestinationKind::Feeds => None,
+    }
 }
 
 /// The active plain Emby library's index (design D7).

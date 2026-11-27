@@ -7,8 +7,9 @@
 
 use crate::bridge::frame::library::{
     GuiAudiobooksDetail, GuiAudiobooksList, GuiDestinationList, GuiEmbyDetail, GuiEmbyList,
-    GuiFeedsDetail, GuiFeedsList, GuiHomeDetail, GuiHomeList, GuiLibraryDetail, GuiLibraryList,
-    GuiMusicDetail, GuiMusicList, GuiPodcastsDetail, GuiPodcastsList, GuiShowsDetail, GuiShowsList,
+    GuiFavouritesList, GuiFeedsDetail, GuiFeedsList, GuiHomeDetail, GuiHomeList, GuiLibraryDetail,
+    GuiLibraryList, GuiMusicDetail, GuiMusicList, GuiPodcastsDetail, GuiPodcastsList,
+    GuiShowsDetail, GuiShowsList,
 };
 
 /// The active destination's list part, narrowed on its kind: the Music list
@@ -171,6 +172,22 @@ pub enum LibraryPair<'a> {
     Podcasts(&'a GuiPodcastsList, &'a GuiPodcastsDetail),
     /// The Feeds destination's parts.
     Feeds(&'a GuiFeedsList, &'a GuiFeedsDetail),
+}
+
+impl<'a> LibraryPair<'a> {
+    /// The destination's Favourites list part (emby-favourites design D6), or
+    /// `None` while the destination's view is not Favourites: the list the
+    /// panel paints in place of the destination's own, with its own pick and
+    /// Hero.
+    #[must_use]
+    pub fn favourites(self) -> Option<&'a GuiFavouritesList> {
+        match self {
+            Self::Music(list, _) => list.favourites.as_ref(),
+            Self::Shows(list, _) => list.favourites.as_ref(),
+            Self::Emby(list, _) => list.favourites.as_ref(),
+            Self::Home(..) | Self::Audiobooks(..) | Self::Podcasts(..) | Self::Feeds(..) => None,
+        }
+    }
 }
 
 /// The pair of the two sections' parts, or `None` while either is absent or

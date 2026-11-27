@@ -378,9 +378,10 @@ fn shows_row_art_scope(view: Option<GuiLibraryView>) -> GuiRowArtScopeFrame {
     match view {
         Some(GuiLibraryView::New) => GuiRowArtScopeFrame::ShowsNew,
         Some(GuiLibraryView::Upcoming) => GuiRowArtScopeFrame::ShowsUpcoming,
-        // The Favourites list's own scope arrives with its list component
-        // (emby-favourites design D6, unit 5.1), so the All tree's scope
-        // stands in and no fetch names it.
+        // The Favourites view paints `LibraryFavouritesList` in this list's
+        // place (emby-favourites design D6), and that list reports the
+        // `Favourites` scope, so the All tree's scope stands in here and no
+        // fetch names it.
         Some(GuiLibraryView::All | GuiLibraryView::Favourites) | None => {
             GuiRowArtScopeFrame::ShowsSeries
         }

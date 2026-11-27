@@ -134,6 +134,44 @@ fn the_plain_emby_content_mounts_the_emby_list_and_hero_and_none_of_the_other_de
         "no other destination's list mounts"
     );
 }
+/// Contract (emby-favourites spec "A Favourites view replaces the destination's
+/// list column"): the Favourites view mounts the favourites list in place of
+/// the destination's own list, with its picked favourite's Hero, no letter rail,
+/// no sort control, and no collection dropdown.
+#[test]
+fn the_favourites_view_mounts_the_favourites_list_and_hero_in_place_of_the_emby_list() {
+    let mut fixture = built(GuiArrangement::Wide);
+    let (list, detail) = fixtures::emby_favourites_sections();
+    fixture.carry(list, detail);
+    seed_idle_status(&mut fixture);
+
+    assert!(
+        fixture.presents("[data-library-favourites-list-column]"),
+        "the favourites list mounts in the list column"
+    );
+    assert!(
+        !fixture.presents("[data-library-emby-list-column]"),
+        "the destination's All list does not paint"
+    );
+    assert!(
+        fixture.presents("[data-library-region=\"hero\"] [data-library-favourites-hero]"),
+        "the Favourites Hero mounts from the favourites list part"
+    );
+    assert!(
+        !fixture.presents("[data-library-emby-hero]"),
+        "the destination's own Hero does not paint"
+    );
+    assert!(
+        !fixture.presents("[data-library-region=\"rail\"]")
+            && !fixture.presents("[data-library-favourites-letter]"),
+        "the Favourites list paints no letter headings and no rail"
+    );
+    assert!(
+        !fixture.presents("[data-library-sort-control]"),
+        "the Favourites view paints no sort control"
+    );
+}
+
 /// Contract (`LibraryPanel.test.ts`, row 8.1): the feed-group Emby content
 /// mounts its collection dropdown and its list (gui-collection-dropdown row
 /// 5.3).

@@ -265,6 +265,66 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
     )
 }
 
+/// The plain Emby-library sections in the Favourites view (emby-favourites
+/// design D6): the list part carries the favourites list with its picked row's
+/// Hero, and the All list's rows, selection, and Hero are absent, as the core
+/// sends them while that view paints.
+pub(super) fn emby_favourites_sections() -> (GuiLibraryList, GuiLibraryDetail) {
+    let hero = GuiEmbyHeroFrame {
+        title: "Heat".to_owned(),
+        facts: crate::bridge::frame::library::GuiHeroFactsFrame {
+            pills: Vec::new(),
+            rows: Vec::new(),
+        },
+        overview: None,
+        art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Landscape,
+        art: None,
+        cast: Vec::new(),
+    };
+    (
+        GuiLibraryList {
+            refreshing: false,
+            tabs: vec![GuiLibraryTabFrame {
+                position: 3,
+                label: "Movies".to_owned(),
+            }],
+            current_tab: Some(3),
+            destination: GuiDestinationList::Emby(GuiEmbyList {
+                view: crate::gui_core::GuiLibraryView::Favourites,
+                sort: None,
+                lib_idx: 3,
+                library_name: "Movies".to_owned(),
+                collections: None,
+                collection_names: Vec::new(),
+                feed_group: false,
+                loading: false,
+                failed: false,
+                rows: Vec::new(),
+                favourites: Some(crate::bridge::frame::library::GuiFavouritesList {
+                    loading: false,
+                    rows: vec![GuiEmbyRowFrame {
+                        art: GuiRowArtFrame::NoSource,
+                        media: GuiRowMediaKindFrame::Video,
+                        id: "m1".to_owned(),
+                        title: "Heat".to_owned(),
+                        subtitle: Some("1995".to_owned()),
+                        date: None,
+                        sort_letter: None,
+                        kind: GuiEmbyRowKindFrame::Media,
+                        state: GuiHomeRowStateFrame::Ordinary,
+                    }],
+                    selected: Some("m1".to_owned()),
+                    hero: Some(hero),
+                }),
+            }),
+        },
+        GuiLibraryDetail::Emby(GuiEmbyDetail {
+            selected: None,
+            hero: None,
+        }),
+    )
+}
+
 /// The carried Audiobooks sections, with `hero` the selected book's Hero the
 /// frame paints (row 9.1).
 pub(super) fn audiobooks_sections(

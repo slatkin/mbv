@@ -47,6 +47,8 @@ use crate::bridge::frame::overlay::GuiRowMenuEntry;
 use crate::window::arrangement::GuiArrangement;
 use crate::window::components::library_audiobooks_hero::LibraryAudiobooksHero;
 use crate::window::components::library_emby_hero::LibraryEmbyHero;
+use crate::window::components::library_favourites_hero::LibraryFavouritesHero;
+use crate::window::components::library_favourites_list::LibraryFavouritesList;
 use crate::window::components::library_feeds_hero::LibraryFeedsHero;
 use crate::window::components::library_hero::LibraryHero;
 use crate::window::components::library_hero_frame::HeroPaneWidth;
@@ -60,6 +62,7 @@ use crate::window::components::library_shows_list::LibraryShowsList;
 use crate::window::components::library_status_bar::LibraryStatusBar;
 use crate::window::components::panel_divider::{DividerName, DividerSide, PanelDivider};
 use crate::window::components::queue_row_menu::QueueRowMenu;
+use crate::window::library::favourites::favourites_part;
 use crate::window::library::lettered::{AudiobooksList, EmbyList, FeedsList, PodcastsList};
 use crate::window::library::parts::{LibraryPair, library_pair};
 use crate::window::library::state::LibraryState;
@@ -93,9 +96,16 @@ fn press_in_panel(library: &LibraryState) {
     library.close_dropdowns();
 }
 
-/// Whether the pair's detail part paints a Hero (design D4, D12): every
-/// destination's detail carries a `hero`, `None` while none is picked.
+/// Whether the pair paints a Hero (design D4, D12; emby-favourites design D6):
+/// every destination's detail carries a `hero`, `None` while none is picked, and
+/// the Favourites view carries its picked favourite's Hero on the list part.
 fn pair_has_hero(pair: &LibraryPair) -> bool {
+    if pair
+        .favourites()
+        .is_some_and(|favourites| favourites.hero.is_some())
+    {
+        return true;
+    }
     match pair {
         LibraryPair::Music(_, detail) => detail.hero.is_some(),
         LibraryPair::Home(_, detail) => detail.hero.is_some(),
@@ -112,6 +122,14 @@ fn pair_has_hero(pair: &LibraryPair) -> bool {
 /// frames from the section store itself, so a panel repaint never
 /// deep-clones a list's rows for it.
 fn list_painter(pair: LibraryPair) -> Element {
+    // The Favourites view paints the favourites list in place of the
+    // destination's own list (emby-favourites design D6): the All list's stores
+    // are untouched, so pressing All paints it as it was.
+    if pair.favourites().is_some() {
+        return rsx! {
+            LibraryFavouritesList {}
+        };
+    }
     match pair {
         LibraryPair::Music(..) => rsx! {
             LibraryList {}
@@ -149,6 +167,14 @@ fn hero_painter(
     detail: Option<&SectionRef<GuiLibraryDetail>>,
 ) -> Option<Element> {
     let list = list?;
+    // The Favourites view's Hero rides the list part (emby-favourites design
+    // D6), so it paints in place of the destination's own Hero, which carries
+    // none while that view is active.
+    if favourites_part(Some(&**list)).is_some_and(|(_, part)| part.hero.is_some()) {
+        return Some(rsx! {
+            LibraryFavouritesHero { list: list.clone() }
+        });
+    }
     let detail = detail?;
     let pair = library_pair(Some(&**list), Some(&**detail))?;
     Some(match pair {

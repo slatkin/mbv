@@ -37,6 +37,17 @@ fn destination_place(key: &DomKey) -> Option<usize> {
 /// destination's own resolve, in the same order `routePanelKey` hands keys
 /// over.
 fn close_active_filter(state: &LibraryState) {
+    // The Favourites view's filter text is the list's own (emby-favourites
+    // design D6), so Esc clears it and leaves the destination's All filter as
+    // it was.
+    let favourites = {
+        let list = state.sections.library_list.peek();
+        crate::window::library::favourites::favourites_site(list.as_deref())
+    };
+    if let Some(site) = favourites {
+        state.close_favourites_filter(site.lib_idx());
+        return;
+    }
     let list = state.sections.library_list.peek();
     match list.as_ref().map(|list| &list.destination) {
         Some(GuiDestinationList::Home(_)) => state.close_home_filter(),
@@ -259,6 +270,7 @@ fn hovered_item_id(state: &LibraryState, pointer: &PointerTarget) -> Option<Stri
         PointerList::Tracklist => Some(row.to_owned()),
         PointerList::Home
         | PointerList::Shows
+        | PointerList::Favourites
         | PointerList::Emby
         | PointerList::Audiobooks
         | PointerList::Podcasts

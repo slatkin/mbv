@@ -20,6 +20,8 @@ pub mod library_audiobooks_hero;
 pub mod library_collection_dropdown;
 pub mod library_dropdown;
 pub mod library_emby_hero;
+pub mod library_favourites_hero;
+pub mod library_favourites_list;
 pub mod library_feeds_hero;
 pub mod library_filter_field;
 pub mod library_hero;

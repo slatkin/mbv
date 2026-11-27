@@ -151,6 +151,9 @@ pub enum GuiRowArtScope {
     ShowsNew,
     /// The Shows Upcoming list's flat premiere rows.
     ShowsUpcoming,
+    /// The Favourites list's rows (emby-favourites design D6), whichever Emby
+    /// destination paints that view.
+    Favourites,
     /// The Podcasts list's episode rows.
     Podcasts,
     /// The Audiobooks list's book rows.

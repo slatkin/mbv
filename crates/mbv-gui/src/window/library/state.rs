@@ -150,6 +150,10 @@ pub struct LibraryState {
     pub music_scroll: Signal<ListScroll>,
     /// The other destinations' scroll stores (`scroll.ts`'s module stores).
     pub scrolls: super::scroll::LibraryScrolls,
+    /// The Favourites view's own scroll and filter text, one per library
+    /// (emby-favourites design D6): the list keeps them apart from the
+    /// destination's All stores, so pressing All finds the All list as it was.
+    pub favourites_views: Signal<super::favourites::FavouritesViews>,
     /// The Home list's interaction state (`home.ts`'s `homeUi`).
     pub home_ui: Signal<super::home::HomeUiState>,
     /// The Emby list's interaction state (`emby.ts`'s `embyUi`).
@@ -236,6 +240,7 @@ impl LibraryState {
             ui: Signal::new(LibraryUiState::initial()),
             music_scroll: Signal::new(initial_list_scroll()),
             scrolls: super::scroll::LibraryScrolls::new(),
+            favourites_views: Signal::new(super::favourites::FavouritesViews::new()),
             home_ui: Signal::new(super::home::HomeUiState::initial()),
             emby_ui: Signal::new(super::emby::initial_emby_ui()),
             shows_ui: Signal::new(super::shows::ShowsUiState::initial()),

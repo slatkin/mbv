@@ -84,6 +84,11 @@ pub enum PointerList {
     Home,
     /// The Shows list.
     Shows,
+    /// The Favourites list (emby-favourites design D6): the list the Music,
+    /// Shows, and plain Emby destinations paint while their view is
+    /// Favourites, with a scroll store of its own per library. No key handler
+    /// routes it yet, so a key over it acts on no row and scrolls no list.
+    Favourites,
     /// A plain Emby library's list.
     Emby,
     /// The Audiobooks list.
@@ -107,6 +112,7 @@ impl PointerList {
             Self::Music => "music",
             Self::Home => "home",
             Self::Shows => "shows",
+            Self::Favourites => "favourites",
             Self::Emby => "emby",
             Self::Audiobooks => "audiobooks",
             Self::Podcasts => "podcasts",
@@ -124,6 +130,7 @@ impl PointerList {
             "music" => Some(Self::Music),
             "home" => Some(Self::Home),
             "shows" => Some(Self::Shows),
+            "favourites" => Some(Self::Favourites),
             "emby" => Some(Self::Emby),
             "audiobooks" => Some(Self::Audiobooks),
             "podcasts" => Some(Self::Podcasts),

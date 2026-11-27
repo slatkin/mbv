@@ -14,10 +14,10 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::GuiPanelToggles;
 use crate::bridge::frame::library::{
-    GuiCollections, GuiDestinationList, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
-    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame,
-    GuiMusicHeroSubjectFrame, GuiMusicList, GuiMusicTrackFrame, GuiRowArtFrame,
-    GuiRowMediaKindFrame,
+    GuiCollections, GuiDestinationList, GuiEmbyRowFrame, GuiEmbyRowKindFrame, GuiFavouritesList,
+    GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame, GuiMusicAlbumFrame,
+    GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicHeroSubjectFrame, GuiMusicList,
+    GuiMusicTrackFrame, GuiRowArtFrame, GuiRowMediaKindFrame,
 };
 use crate::bridge::sections::GuiSectionBatch;
 use crate::core_thread::CoreInput;
@@ -126,6 +126,64 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
             favourites: None,
         }),
     }
+}
+
+/// The Music list section value with the destination's view Favourites
+/// (emby-favourites design D6): the favourites rows ride the list part and the
+/// artist tree is empty, as the core sends it while that view paints.
+fn music_favourites_list(rows: Vec<GuiEmbyRowFrame>) -> GuiLibraryList {
+    GuiLibraryList {
+        refreshing: false,
+        tabs: vec![GuiLibraryTabFrame {
+            position: 1,
+            label: "Music".to_owned(),
+        }],
+        current_tab: Some(1),
+        destination: GuiDestinationList::Music(GuiMusicList {
+            view: crate::gui_core::GuiLibraryView::Favourites,
+            lib_idx: 0,
+            collections: GuiCollections {
+                target: crate::gui_core::GuiCollectionTarget::Music(0),
+                all: true,
+                entries: Vec::new(),
+                noun: crate::gui_core::GuiCollectionNoun::Groups,
+            },
+            loading: false,
+            failure: None,
+            artists: Vec::new(),
+            favourites: Some(GuiFavouritesList {
+                loading: false,
+                rows,
+                selected: None,
+                hero: None,
+            }),
+        }),
+    }
+}
+
+/// One carried favourites row with no art and no played state.
+fn favourite_row(id: &str, title: &str) -> GuiEmbyRowFrame {
+    GuiEmbyRowFrame {
+        id: id.to_owned(),
+        title: title.to_owned(),
+        subtitle: None,
+        date: None,
+        sort_letter: None,
+        kind: GuiEmbyRowKindFrame::Media,
+        state: GuiHomeRowStateFrame::Ordinary,
+        art: GuiRowArtFrame::NoSource,
+        media: GuiRowMediaKindFrame::Video,
+    }
+}
+
+/// The Favourites view's own scroll facts of one library, as the tests read
+/// them.
+fn favourites_scroll(state: &LibraryState, lib_idx: usize) -> String {
+    let scroll = state.favourites_view(lib_idx).scroll;
+    format!(
+        "top={} viewport={}",
+        scroll.scroll_top, scroll.viewport_height
+    )
 }
 
 /// The Music detail section value: the given Hero, `None` while none is
@@ -548,6 +606,59 @@ fn close_popovers_closes_every_dropdown_and_the_search_panel_and_clears_filters(
             "view=DropdownState(None)",
             "seasons=DropdownState(None)",
             "search_panel=false",
+        ]
+    );
+}
+
+/// emby-favourites design D6, D7: the Favourites list keeps its own scroll and
+/// filter text per library, so scrolling and filtering it leave the All list's
+/// scroll store and filter text as they were and another library's Favourites
+/// view untouched.
+#[test]
+fn the_favourites_scroll_and_filter_are_their_own_per_library() {
+    // Twenty closed artists under one letter: the All list is taller than its
+    // short viewport, so its scroll holds a real offset.
+    let artists: Vec<GuiMusicArtistFrame> = (0..20).map(|index| artist("artist", index)).collect();
+    let all = music_list(artists);
+    let rows = vec![favourite_row("m1", "Alien"), favourite_row("m2", "Brazil")];
+    let favourites = music_favourites_list(rows.clone());
+    let (facts, _rx) = run(move |state, facts| {
+        carry(state, Some(all.clone()), Some(music_detail(None)));
+        state.measure_library_list(40.0);
+        state.scroll_library_list(120.0);
+        facts
+            .lock()
+            .expect("facts")
+            .push(format!("all {}", music_scroll(state)));
+        // The view moves to Favourites: the core sends the favourites part and
+        // no artist tree.
+        carry(state, Some(favourites.clone()), Some(music_detail(None)));
+        let part = GuiFavouritesList {
+            loading: false,
+            rows: rows.clone(),
+            selected: None,
+            hero: None,
+        };
+        let painted = crate::window::library::favourites::favourites_rows(&part, "");
+        state.measure_favourites_list(0, 40.0, None, &painted);
+        state.scroll_favourites_list(0, 56.0, &painted);
+        let mut recorded = facts.lock().expect("facts");
+        recorded.push(format!("favourites0 {}", favourites_scroll(state, 0)));
+        recorded.push(format!("favourites1 {}", favourites_scroll(state, 1)));
+        drop(recorded);
+        state.set_favourites_filter(0, "Ali".to_owned());
+        let mut recorded = facts.lock().expect("facts");
+        recorded.push(format!("all after {}", music_scroll(state)));
+        recorded.push(format!("filter {:?}", state.ui.peek().filter));
+    });
+    assert_eq!(
+        facts,
+        [
+            "all top=120 viewport=40",
+            "favourites0 top=56 viewport=40",
+            "favourites1 top=0 viewport=0",
+            "all after top=120 viewport=40",
+            "filter \"\"",
         ]
     );
 }

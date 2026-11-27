@@ -9,6 +9,7 @@ pub mod audiobooks_workspace;
 pub mod emby;
 pub mod emby_keys;
 pub mod episode;
+pub mod favourites;
 pub mod feeds;
 pub mod feeds_keys;
 pub mod hero;
