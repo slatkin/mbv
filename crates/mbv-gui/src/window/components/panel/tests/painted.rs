@@ -29,6 +29,22 @@ fn the_now_playing_title_paints_no_uppercase_transform() {
     );
 }
 
+/// Contract (user request 2026-11-27): the now-playing title paints one step
+/// under the Hero's series-level heading, at the Hero's episode-name size, so
+/// the same title reads the same size in both places.
+#[test]
+fn the_now_playing_title_paints_the_hero_episode_name_size() {
+    let mut fixture = built(TALL);
+    fixture.set_playback(playback());
+
+    assert!(
+        fixture
+            .style_of("[data-now-playing-title]")
+            .contains("font-size: 16px"),
+        "the title matches the Hero's 16 px name step"
+    );
+}
+
 /// Contract (`Panel.test.ts`): the compact strip paints the meta line with
 /// the next item — the parent line and `Next: <title>` joined as one
 /// truncating line — and no queue row paints (the next item is a summary

@@ -307,11 +307,15 @@ pub fn QueuePlaybackPanel() -> Element {
                         // The title wraps rather than truncating (user request
                         // 2026-11-24): the block is one row of the column, so a
                         // long name takes the lines it needs, and a long token
-                        // breaks rather than overflowing the column.
+                        // breaks rather than overflowing the column. The size
+                        // is one step under the Hero's series-level heading
+                        // (user request 2026-11-27): the Hero paints an item's
+                        // name at 16 px (its episode step), so the same title
+                        // here reads the same size.
                         span {
                             "data-now-playing-title": "",
                             style: format!(
-                                "font-family: var(--font-mono); font-size: 18px; font-weight: 700; line-height: 1.15; letter-spacing: 0.06em; overflow-wrap: break-word; color: {};",
+                                "font-family: var(--font-mono); font-size: 16px; font-weight: 700; line-height: 1.15; letter-spacing: 0.06em; overflow-wrap: break-word; color: {};",
                                 ef_var(EfToken::Fg)
                             ),
                             "{title}"
