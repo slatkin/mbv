@@ -23,24 +23,24 @@ Tests are the implementer's choice under `docs/invariants/14-test-ownership.md`;
 
 ## 2. Menu entry and action
 
-- [ ] 2.1 Add `ContextAction::Favourite(String)` and `Unfavourite(String)` in
+- [x] 2.1 Add `ContextAction::Favourite(String)` and `Unfavourite(String)` in
   `crates/mbv-ui-model/src/context_menu.rs`; give each an exhaustive arm wherever the compiler
   names a match (no wildcard). Verify: `make checks PKG=mbv-ui-model` reports no missing arm.
-- [ ] 2.2 Push the entry in `crates/mbv-client-core/src/app/dispatch/context_menu/menu/emby.rs`: a
+- [x] 2.2 Push the entry in `crates/mbv-client-core/src/app/dispatch/context_menu/menu/emby.rs`: a
   `push_favourite_context_action` called after the played-state entry in both
   `push_folder_context_actions` and `push_leaf_context_actions`, single row only, only when
   `item.supports_favourite()`, and never on the Queue-focus path (design D2). Labels "Add to
   Favourites" / "Remove from Favourites"; a music track's entry follows Enqueue, because
   music has no played-state entry.
-- [ ] 2.3 Execute the actions in `.../context_menu/actions.rs`: `context_set_favourite` calls
+- [x] 2.3 Execute the actions in `.../context_menu/actions.rs`: `context_set_favourite` calls
   `set_favourite`, then runs the design D4 flip over every App-held copy (new helper in
   client-core): the TUI levels, Home content, the series details (`series_detail_item`), the
   album track cache, and the artist detail cache; no client flashes "Emby is unavailable"; an
   error flashes an error toast and changes nothing.
-- [ ] 2.4 Confirm the GUI Library row-menu path carries the entry for plain-library, Shows, Music,
+- [x] 2.4 Confirm the GUI Library row-menu path carries the entry for plain-library, Shows, Music,
   and Home rows whose item supports favourites, adding no artist-row resolution: the grouped Music
   tree's artist rows offer no favourites entry, keyed by Service id or by name (design D8).
-- [ ] 2.5 Add `CONTEXT.md` term *Favourite* (the Emby per-user flag; *Avoid*: star, like, bookmark)
+- [x] 2.5 Add `CONTEXT.md` term *Favourite* (the Emby per-user flag; *Avoid*: star, like, bookmark)
   and update `docs/recipes.md` only if a recipe's site list moved. Verify: `rg "Favourite"
   CONTEXT.md` shows the term.
 
