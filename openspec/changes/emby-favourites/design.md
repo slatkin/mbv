@@ -113,7 +113,10 @@ Favourites in place of the collection names.
 
 **D6. One Favourites list, fetched per library, painted by one component.** The GUI core holds a
 favourites store keyed by library id, holding the same request state type the New store uses
-(`GuiSectionRequest`, with the in-place refresh set). The fetch runs on a worker and lands through
+(`GuiSectionRequest`, with the in-place refresh set). Failure follows the New store's rule exactly:
+a failed first load lands an empty list, and a failed in-place refresh keeps the rows already held.
+No spec scenario paints a failure state, so the list's frame part carries a `loading` flag and no
+failure mark. The fetch runs on a worker and lands through
 a new `LibraryFetchEvent::Favourites { library_id, result }`:
 
 - every library: `Items?ParentId=<lib>&Recursive=true&Filters=IsFavorite` with the same `Fields` as

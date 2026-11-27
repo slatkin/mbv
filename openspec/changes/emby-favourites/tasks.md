@@ -74,8 +74,8 @@ Tests are the implementer's choice under `docs/invariants/14-test-ownership.md`;
   (design D7).
 - [ ] 4.2 Project the store into the list parts: the collections-first, Title-ordered
   `GuiEmbyRowFrame` list (design D6, D9) as an optional part on the Shows, Music, and
-  plain-library list frames, with `loading` and `failed`. Add the Favourites Hero and the
-  separate favourites pick (design D6).
+  plain-library list frames, with `loading` and no failure mark (design D6's failure rule).
+  Add the Favourites Hero and the separate favourites pick (design D6).
 - [ ] 4.3 Resolve a favourites id in `item_actions::library_item` and the select, play, shuffle,
   and enqueue paths, and select into the Favourites Hero of design D6, not the plain-library Hero
   producer, whose `hero_item` gate paints no Hero for a folder or a non-`Movie`. The favourites
