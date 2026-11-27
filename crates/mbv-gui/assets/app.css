@@ -184,6 +184,23 @@
 	   column's raised fill (#2d353b, +4 per channel, the mockup's step), so
 	   the subtree reads as one block. */
 	--canvas-tree-subtree: #313940; /* the expanded area's fill */
+	/* The tree rows' role tokens (gui-tree-row-roles design D6): the two rail
+	   tones, the branch's open fills, the leaf well's fills and edges, the
+	   branch facts tone, and the five branch swatch colours. Values follow the
+	   mockup's step ratios over the code's own fills; every value is opaque. */
+	--canvas-tree-rail: var(--canvas-accent); /* the open root's rail: the accent tone */
+	--canvas-tree-rail-muted: #627157; /* the group rail: 45% accent over the group fill */
+	--canvas-tree-branch-open: #363f3d; /* the open branch's fill: 10% accent over the group */
+	--canvas-tree-branch-open-picked: #404c4a; /* the open branch that is also the picked row: 10% accent over the raise */
+	--canvas-tree-well: var(--canvas-dim); /* the leaf well's fill: the dim tier */
+	--canvas-tree-well-rule: #24292c; /* the 1 px line between two leaf rows of one well */
+	--canvas-tree-well-shade: #15191b; /* the 1 px line on the well's top edge: the depth cue */
+	--canvas-tree-facts: var(--canvas-type-date); /* the branch row's facts line: the link hue */
+	--canvas-tree-swatch-1: #e67e80; /* the first branch swatch: red */
+	--canvas-tree-swatch-2: #7fbbb3; /* the second branch swatch: blue */
+	--canvas-tree-swatch-3: #dbbc7f; /* the third branch swatch: yellow */
+	--canvas-tree-swatch-4: #d699b6; /* the fourth branch swatch: purple */
+	--canvas-tree-swatch-5: #e69875; /* the fifth branch swatch: orange */
 	/* The Queue panel column's backdrop beside the Library panel: the dim
 	   tier, so the raised library panel contrasts against it. One fill at
 	   every focus state (user decision 2026-11-15). */

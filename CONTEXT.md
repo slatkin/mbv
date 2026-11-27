@@ -566,6 +566,14 @@ Fact pill (GUI):
 A short Hero fact in a pill in the Hero's header band, such as a year, a genre, a runtime, or a count. A pill may link to a provider page. The Hero's longer facts sit in fact rows of the detail block instead.
 _Avoid_: chip, tag, badge
 
+Branch swatch (GUI):
+The flat colour square on a branch row of a *GUI Library panel* tree that tells it apart from its siblings. It carries no meaning and no artwork.
+_Avoid_: chip, colour chip, tag
+
+Leaf well (GUI):
+The recessed block that holds the leaf rows of one open parent in a *GUI Library panel* tree.
+_Avoid_: tray (the *Tray* is the desktop status icon), card
+
 Hero backdrop (GUI):
 The Hero's own art, heavily blurred into soft colour fields, behind the header and the detail block at the full width of the Hero pane, fading into the pane's background towards the bottom. The core bakes it as one opaque JPEG on the `backdrop/` art path, so the window uses no opacity, gradient, or filter. It is not a glow: no halo, shadow, or tint. It differs from the dimmed scrim of the Library Hero overlay and from a CSS blur filter.
 _Avoid_: glow, background image
