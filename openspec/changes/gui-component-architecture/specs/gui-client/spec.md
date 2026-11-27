@@ -36,7 +36,7 @@ Every Library destination SHALL show its list and its Hero through the same list
 
 ### Requirement: One drag gesture serves every drag
 
-The Queue row drag and the scrubber seek drag SHALL behave by the same gesture rules. A drag SHALL start on pointer motion after a press, SHALL follow the pointer anywhere in the window, and SHALL end on the release. A new press while a drag is armed, or the pointer leaving the window, SHALL cancel the drag with no effect.
+The Queue row drag and the scrubber seek drag SHALL share one gesture: it starts on pointer motion after a press, follows the pointer anywhere in the window, and ends on the release. A new press while a drag is armed, the pointer leaving the window, or the Esc key SHALL cancel the drag with no effect, and the drag SHALL consume that Esc. The Queue row drag SHALL move the slot only on the release. The scrubber keeps its present behaviour: a press on the bar seeks, a drag anchored on the bar seeks continuously (throttled) while the pointer is over the bar, and a drag that leaves the bar makes no further seek.
 
 #### Scenario: A Queue row drag moves the slot
 
@@ -46,13 +46,23 @@ The Queue row drag and the scrubber seek drag SHALL behave by the same gesture r
 
 #### Scenario: A drag leaves the list
 
-- **WHEN** the user drags a queue row or the scrubber and moves the pointer outside the list or the scrubber, but inside the window
+- **WHEN** the user drags a queue row and moves the pointer outside the list, but inside the window
 - **THEN** the drag continues to follow the pointer
+
+#### Scenario: A scrubber drag leaves the bar
+
+- **WHEN** the user drags on the scrubber and moves the pointer off the bar
+- **THEN** the seeks made so far stand, and no further seek happens until the release
 
 #### Scenario: The pointer leaves the window during a drag
 
 - **WHEN** the pointer leaves the window while a drag is armed
-- **THEN** the drag ends with no move and no seek
+- **THEN** a Queue row drag ends with no move, and a scrubber drag ends with no further seek
+
+#### Scenario: Esc cancels a Queue drag
+
+- **WHEN** the user presses Esc while a Queue row drag is armed
+- **THEN** the drag ends with no move, and the key does nothing else
 
 ## MODIFIED Requirements
 

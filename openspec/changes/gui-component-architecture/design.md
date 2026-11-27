@@ -251,7 +251,10 @@ through a context signal, so moves reach it anywhere in the window by bubbling. 
 armed, or a pointer leave, cancels the gesture. LIST BASE's `reorder` capability paints the ghost
 and the insertion line from it and sends `Reorder(key, anchor)` on drop. The QUEUE level turns
 that into the move request it sends today. The scrubber (PANEL, player panel) uses the same
-gesture for seek. `GuiQueue.drag` and `GuiQueue.hover` leave the frame.
+gesture and keeps today's seek rules: a press seeks, a drag anchored on the bar seeks throttled
+while the pointer is over the bar (`admit_scrub`'s rule, moved into the scrubber), and a drag off
+the bar seeks no more. Esc cancels an armed drag with no effect, and the gesture consumes that
+Esc before the keyboard router sees it (today `mbv-surfaces` does this in the Queue surface). `GuiQueue.drag` and `GuiQueue.hover` leave the frame.
 
 *Why not a capture shim in Blitz?* The rules forbid patching the pinned stack, and bubbling to
 the root is enough.

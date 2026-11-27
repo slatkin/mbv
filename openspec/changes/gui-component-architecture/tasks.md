@@ -103,7 +103,7 @@ the destination accepts that asserts the resulting command.
   find each token.
 - [ ] 4.3 Add `src/window/components/gesture.rs` (D9) and the root `onpointermove`,
   `onpointerup`, and `onpointerleave` handlers in the app root. Add contract tests: motion past
-  the threshold starts a drag, a release drops it, a new press cancels it, a leave cancels it.
+  the threshold starts a drag, a release drops it, a new press cancels it, a leave cancels it, Esc cancels it and is consumed.
   Verify: the new tests pass.
 - [ ] 4.4 Add CONTROL BASE (`control.rs`, `control/`) with button, icon button, text button,
   tab, pill, switch, checkbox, pick button, and hover action variants, and their contract tests
@@ -257,8 +257,8 @@ the destination accepts that asserts the resulting command.
   rows in view, and the core uses that report for page keys and the wheel-follow rule. The
   build may stay red until task 10.4. Delete `queue_panel/row.rs`, `row_cells.rs`, and
   `geometry.rs`. Verify: `make checks PKG=mbv-gui` shows only errors at the region-set sites.
-- [ ] 10.3 Move the scrubber seek onto the gesture of task 4.3. Contract test: a drag seeks on
-  release, a leave cancels. Verify: the new test passes.
+- [ ] 10.3 Move the scrubber seek onto the gesture of task 4.3. Contract tests: a press seeks, a drag
+  over the bar seeks, a drag off the bar seeks no more, a leave ends the drag. Verify: the new test passes.
 - [ ] 10.4 Give every component that reports a region set a Dioxus handler that sends
   `GuiPointerAct` with its painted `RegionTarget` (D8): the player panel, the Status bar, the
   dialogs, the attach screen, the compact strip, the collapsed rail, and the track chips. In the
