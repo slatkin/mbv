@@ -58,6 +58,15 @@ impl GuiCore {
     pub fn gui_favourites_projection(&mut self, lib_idx: usize) -> GuiFavouritesProjection {
         favourites_projection(&mut self.app, &self.gui, lib_idx)
     }
+
+    /// Open `lib_idx`'s Favourites view again (design D7): a destination
+    /// opened on its stored Favourites view fetches that list again, so a
+    /// favourite added elsewhere shows on the next opening. It is the open
+    /// step's work, never a per-frame one: a landed list would refetch on every
+    /// paint if the frame path called it.
+    pub(in crate::gui_core::gui_library) fn refetch_open_favourites(&mut self, lib_idx: usize) {
+        refetch_favourites(&mut self.app, &mut self.gui, lib_idx);
+    }
 }
 
 /// The Favourites list of `lib_idx` (design D6, D9): the store's rows,
@@ -116,13 +125,12 @@ fn favourites_collection(item: &EmbyItem) -> bool {
     super::emby_projection::row_kind(item) == super::GuiEmbyRowKind::Collection
 }
 
-/// Start `lib_idx`'s favourites fetch (design D7): entering the view and the
-/// Favourites view's refresh control both call this. With no landed list the
-/// fetch takes the first-load path, and with a landed list it keeps that list
-/// in place and starts the fetch, recording the library in the in-flight set so
-/// a second refetch while that fetch runs starts nothing. No Emby client starts
-/// nothing at all, and the no-client condition is not a fetch failure: no mark
-/// is stored.
+/// Start `lib_idx`'s favourites fetch (design D7): entering the view, the
+/// Favourites view's refresh control, the destination's open step, and a
+/// favourite write's landing all call this. With no request held the fetch
+/// takes the first-load path, and with a landed list it keeps that list in
+/// place and starts the in-place refresh. No Emby client starts nothing at all,
+/// and the no-client condition is not a fetch failure: no mark is stored.
 pub(crate) fn refetch_favourites(app: &mut App, gui: &mut GuiClientState, lib_idx: usize) {
     let Some(client) = app.emby_snapshot() else {
         return;
@@ -131,21 +139,49 @@ pub(crate) fn refetch_favourites(app: &mut App, gui: &mut GuiClientState, lib_id
         return;
     };
     let music = app.is_grouped_music_library(lib_idx);
-    let loaded = gui
-        .favourites
-        .get(&library_id)
-        .is_some_and(GuiSectionRequest::is_landed);
-    if loaded {
-        if !gui.favourites_refreshing.insert(library_id.clone()) {
-            return;
+    let refreshing = gui.favourites_refreshing.contains(&library_id);
+    match favourites_fetch(gui.favourites.get(&library_id), refreshing) {
+        FavouritesFetch::Hold => return,
+        FavouritesFetch::Refresh => {
+            gui.favourites_refreshing.insert(library_id.clone());
         }
-    } else {
-        // The requesting mark blocks a second fetch; the completion replaces
-        // it with landed rows, empty when the fetch fails.
-        gui.favourites
-            .insert(library_id.clone(), GuiSectionRequest::Requesting);
+        FavouritesFetch::FirstLoad => {
+            // The requesting mark blocks a second fetch; the completion
+            // replaces it with landed rows, empty when the fetch fails.
+            gui.favourites
+                .insert(library_id.clone(), GuiSectionRequest::Requesting);
+        }
     }
     start_favourites_fetch(app, client, library_id, music);
+}
+
+/// What one favourites refetch call starts (design D6, D7): the first load
+/// while the store holds no request, the in-place refresh while it holds a
+/// landed list and none is in flight, and nothing while a first load or a
+/// refresh is already in flight. Both in-flight marks hold, so a duplicate
+/// first load can never land empty after a successful worker landed rows.
+pub(crate) fn favourites_fetch(
+    state: Option<&GuiSectionRequest<EmbyItem>>,
+    refreshing: bool,
+) -> FavouritesFetch {
+    match state {
+        None => FavouritesFetch::FirstLoad,
+        Some(GuiSectionRequest::Requesting) => FavouritesFetch::Hold,
+        Some(GuiSectionRequest::Landed(_)) if refreshing => FavouritesFetch::Hold,
+        Some(GuiSectionRequest::Landed(_)) => FavouritesFetch::Refresh,
+    }
+}
+
+/// The work one favourites refetch call starts (design D6, D7).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FavouritesFetch {
+    /// Start the first load: the store holds no request.
+    FirstLoad,
+    /// Start the in-place refresh: a landed list is held and none is in
+    /// flight.
+    Refresh,
+    /// Start nothing: a first load or a refresh is already in flight.
+    Hold,
 }
 
 /// Start one library's favourites fetch worker (design D6): the one spawn body

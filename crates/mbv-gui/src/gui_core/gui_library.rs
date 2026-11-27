@@ -63,6 +63,8 @@ pub use self::emby_projection::{GuiEmbyHero, GuiEmbyProjection, GuiEmbyRow, GuiE
 pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow};
 pub use self::favourites::GuiFavouritesProjection;
 pub(crate) use self::favourites::apply_favourite_change;
+#[cfg(test)]
+pub(crate) use self::favourites::{FavouritesFetch, favourites_fetch};
 use self::feeds::GuiFeedsCollectionSite;
 pub use self::feeds::GuiFeedsSelection;
 #[cfg(test)]
@@ -536,7 +538,15 @@ impl GuiCore {
     /// load of its own. Home and Music have no user-action work. The match names
     /// every destination kind and every absent case, so a new kind does not
     /// compile until it states its open step.
+    ///
+    /// An Emby destination opened on its stored Favourites view fetches that
+    /// list again first (emby-favourites design D7): a favourite added in
+    /// another destination shows on the next opening. It rides the open step
+    /// and never the load pass, which runs on every paint.
     fn open_gui_active_destination(&mut self) {
+        if let Some(lib_idx) = Self::open_favourites_library(&self.app, &self.gui) {
+            self.refetch_open_favourites(lib_idx);
+        }
         match tabs::active_destination(&self.app) {
             // No presented destination: the open names nothing to open.
             None => {}
@@ -556,6 +566,25 @@ impl GuiCore {
                 self.gui_podcast_open(lib_idx);
             }
         }
+    }
+
+    /// The active destination's Emby library while that library's stored view
+    /// is Favourites (emby-favourites design D7): the library an open fetches
+    /// again. `None` for every other destination and every other view.
+    fn open_favourites_library(
+        app: &App,
+        gui: &crate::gui_core::gui_client_state::GuiClientState,
+    ) -> Option<usize> {
+        let lib_idx = match tabs::active_destination(app)? {
+            GuiDestinationKind::Music { lib_idx }
+            | GuiDestinationKind::Shows { lib_idx }
+            | GuiDestinationKind::Library { lib_idx } => lib_idx,
+            GuiDestinationKind::Home
+            | GuiDestinationKind::Audiobooks { .. }
+            | GuiDestinationKind::Podcasts { .. }
+            | GuiDestinationKind::Feeds => return None,
+        };
+        (shows::library_view(gui, lib_idx) == GuiLibraryView::Favourites).then_some(lib_idx)
     }
 
     /// Select a Home row (design D2, D12): the row the Hero shows. The

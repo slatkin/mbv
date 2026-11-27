@@ -7,7 +7,7 @@
 
 use super::*;
 
-use crate::gui_core::gui_library::GuiSectionRequest;
+use crate::gui_core::gui_library::{FavouritesFetch, GuiSectionRequest, favourites_fetch};
 use mbv_client_core::config::TestStateDirGuard;
 use mbv_net::mock_http::MockHttp;
 
@@ -192,10 +192,15 @@ const ARTIST_TRACKS: &str = r#"{"Items":[
 {"Id":"tr-alpha-1","Name":"Alpha One","Type":"Audio","MediaType":"Audio","AlbumId":"alb-alpha","Album":"Alpha","ProductionYear":1990,"ParentIndexNumber":1,"IndexNumber":1}
 ],"TotalRecordCount":3}"#;
 
-/// A stub `App` attached to a local daemon Owner, whose Music library's view is
-/// Favourites and whose favourites list holds one music artist row: the
-/// Library panel has focus, so the row's menu builds and its entries run.
-fn favourite_artist_app(http: &MockHttp) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+/// A stub `App` attached to a local daemon Owner, whose one Emby library of
+/// `collection_type` is the active destination and whose Emby runtime holds a
+/// client over `http`: the Library panel has focus, so a row's menu builds and
+/// its entries run.
+fn emby_app_with_client(
+    http: &MockHttp,
+    library_id: &str,
+    collection_type: &str,
+) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(Vec::new());
     let mut config = app.config_for_test(|config| config.clone());
     config.server_url = "http://127.0.0.1:1".into();
@@ -206,19 +211,40 @@ fn favourite_artist_app(http: &MockHttp) -> (App, std::sync::mpsc::Receiver<mbv_
         .with_test_agent(http.agent());
     app.adopt_ready_emby_client_for_test(client);
     app.take_libraries_for_test();
-    let mut library = make_item("Music", "CollectionFolder");
-    library.id = "lib-music".into();
-    library.collection_type = "music".into();
+    let mut library = make_item("Library", "CollectionFolder");
+    library.id = library_id.into();
+    library.collection_type = collection_type.into();
     app.push_library_for_test(LibraryTab::new(library));
     app.seed_active_tab_for_test(TabSelection::EmbyLibrary(0));
     app.set_panel_focus(PanelFocus::Library);
+    (app, cmd_rx)
+}
+
+/// The stub's favourites store and view, seeded beside the `App` a test holds.
+fn seed_favourites(items: Vec<EmbyItem>, library_id: &str) {
     crate::gui_core::test_support::stub_gui_state(|gui| {
-        gui.favourites.insert(
-            "lib-music".to_string(),
-            GuiSectionRequest::landed(vec![typed_item("artist-1", "Metallica", "MusicArtist")]),
-        );
+        gui.favourites
+            .insert(library_id.to_string(), GuiSectionRequest::landed(items));
         gui.library_views.insert(0, GuiLibraryView::Favourites);
     });
+}
+
+/// Whether `library_id`'s favourites refetch is in flight: the mark the open
+/// step and the refresh control set while their worker runs.
+fn favourites_refreshing(library_id: &str) -> bool {
+    crate::gui_core::test_support::stub_gui_state(|gui| {
+        gui.favourites_refreshing.contains(library_id)
+    })
+}
+
+/// A stub `App` attached to a local daemon Owner, whose Music library's view is
+/// Favourites and whose favourites list holds one music artist row.
+fn favourite_artist_app(http: &MockHttp) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+    let (app, cmd_rx) = emby_app_with_client(http, "lib-music", "music");
+    seed_favourites(
+        vec![typed_item("artist-1", "Metallica", "MusicArtist")],
+        "lib-music",
+    );
     (app, cmd_rx)
 }
 
@@ -302,4 +328,55 @@ fn a_favourite_artist_rows_shuffle_fetches_the_artists_tracks() {
             .any(|request| request.contains("ParentId=artist-1")),
         "the shuffle entry does not send the artist's id as a folder parent"
     );
+}
+
+/// The empty favourites answer the mock transport returns.
+const EMPTY_FAVOURITES: &str = r#"{"Items":[],"TotalRecordCount":0}"#;
+
+/// Contract (design D7, spec "The Favourites view follows favourite changes"):
+/// opening a library whose stored view is Favourites fetches that list again,
+/// so a favourite added in another destination shows on the next opening.
+#[test]
+fn opening_a_library_on_its_favourites_view_refetches_the_list() {
+    let _guard = TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.respond_when("Filters=IsFavorite", 200, EMPTY_FAVOURITES);
+    let (mut app, _cmd_rx) = emby_app_with_client(&http, "lib-movies", "movies");
+    seed_favourites(vec![typed_item("movie-b", "Beta", "Movie")], "lib-movies");
+
+    apply_gui_library_command(&mut app, GuiLibraryCommand::OpenDestination { position: 0 });
+    assert!(
+        !favourites_refreshing("lib-movies"),
+        "opening Home starts no favourites fetch"
+    );
+    apply_gui_library_command(&mut app, GuiLibraryCommand::OpenDestination { position: 1 });
+
+    assert!(
+        favourites_refreshing("lib-movies"),
+        "opening the library on its Favourites view starts the list's fetch"
+    );
+}
+
+/// Contract (design D6): the fetch decision holds while a first load or an
+/// in-place refresh is already in flight, so no duplicate worker can land
+/// empty after a successful one landed rows.
+#[rstest::rstest]
+#[case::no_request(None, false, FavouritesFetch::FirstLoad)]
+#[case::first_load_in_flight(Some(false), false, FavouritesFetch::Hold)]
+#[case::landed(Some(true), false, FavouritesFetch::Refresh)]
+#[case::refresh_in_flight(Some(true), true, FavouritesFetch::Hold)]
+fn a_favourites_fetch_holds_while_one_is_in_flight(
+    #[case] state: Option<bool>,
+    #[case] refreshing: bool,
+    #[case] expected: FavouritesFetch,
+) {
+    let request = state.map(|landed| {
+        if landed {
+            GuiSectionRequest::landed(vec![typed_item("movie-b", "Beta", "Movie")])
+        } else {
+            GuiSectionRequest::Requesting
+        }
+    });
+
+    assert_eq!(favourites_fetch(request.as_ref(), refreshing), expected);
 }
