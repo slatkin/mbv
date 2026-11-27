@@ -36,27 +36,26 @@ pub fn LibraryHeroHeart(props: LibraryHeroHeartProps) -> Element {
     let attrs = vec![Attribute::new(props.hook, "", None, false)];
     let item_id = props.heart.item_id.clone();
     let favourite = props.heart.favourite;
-    let (label, fill, color) = if favourite {
-        (
-            "Remove from Favourites",
-            "currentColor".to_owned(),
-            "#e57e80".to_owned(),
-        )
+    // The svg paints from its own `color` attribute, which a CSS `:hover` on
+    // the button does not re-resolve, so the hover state is a signal that
+    // names the glyph's colour: rose at rest, accent green under the pointer.
+    let mut hovered = use_signal(|| false);
+    let (label, fill) = if favourite {
+        ("Remove from Favourites", "currentColor".to_owned())
     } else {
-        (
-            "Add to Favourites",
-            "none".to_owned(),
-            "var(--canvas-muted)".to_owned(),
-        )
+        ("Add to Favourites", "none".to_owned())
     };
+    let color = if hovered() { "#a7c080" } else { "#e57e80" };
     rsx! {
         button {
             "type": "button",
-            class: "hero-heart flex flex-none items-center justify-center",
-            style: "width: 32px; height: 32px; padding: 0; --hover-veil: transparent; --heart-color: {color}; background: none; border: none; color: {color}; cursor: pointer;",
+            class: "flex flex-none items-center justify-center",
+            style: "width: 32px; height: 32px; padding: 0; --hover-veil: transparent; background: none; border: none; color: {color}; cursor: pointer;",
             "aria-label": label,
             "aria-pressed": if favourite { "true" } else { "false" },
             title: label,
+            onpointerenter: move |_| hovered.set(true),
+            onpointerleave: move |_| hovered.set(false),
             onclick: move |_| {
                 library.link.library(GuiLibraryCommand::SetFavourite {
                     item_id: item_id.clone(),
@@ -67,6 +66,7 @@ pub fn LibraryHeroHeart(props: LibraryHeroHeartProps) -> Element {
             Heart {
                 size: HEART_ICON_SIZE,
                 fill,
+                color: color.to_owned(),
             }
         }
     }
