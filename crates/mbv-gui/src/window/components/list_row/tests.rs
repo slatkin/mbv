@@ -668,15 +668,16 @@ fn assert_title_weight(fixture: &Fixture, weight: Option<&str>) {
     }
 }
 
-/// Contract (design D4; gui-played-row-marks design D1, D3, D4): a nested
-/// row's title tone and weight follow its play state, and its play mark names
-/// the state — no play state paints the level's own tone and weight and no
-/// mark, an unplayed row the `ef` text tone at 600 with the `unplayed` mark,
+/// Contract (design D4; gui-played-row-marks design D1, D3, D4;
+/// `gui-tree-row-roles` design D7): a nested row's title tone and weight
+/// follow its play state, and its play mark names the state — no play state
+/// paints the level's own tone and weight and no mark, an unplayed row the
+/// `ef` text tone at 600 with the `unplayed` mark,
 /// and a played row the `ef` grey tone at 400 with the `played` mark. A nested
 /// row paints no resume mark, so an in-progress row keeps its mark (user
 /// request 2026-11-26).
 #[rstest]
-#[case(None, "var(--canvas-muted)", None, None)]
+#[case(None, "var(--canvas-text)", None, None)]
 #[case(
     Some(GuiHomeRowStateFrame::Ordinary),
     "var(--ef-fg)",

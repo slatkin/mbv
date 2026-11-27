@@ -107,12 +107,19 @@ pub const SWATCH_TOKENS: [&str; 5] = [
 /// restarts at swatch 2, so orange is never followed by red.
 #[must_use]
 pub fn swatch_var(sibling: usize) -> String {
-    let index = if sibling < SWATCH_TOKENS.len() {
+    canvas_var(SWATCH_TOKENS[swatch_index(sibling)])
+}
+
+/// The swatch's index into [`SWATCH_TOKENS`] for its position among the
+/// painted siblings (design D4): the wrap rule [`swatch_var`] names, exposed
+/// for the `data-tree-swatch` hook that carries the swatch number.
+#[must_use]
+pub fn swatch_index(sibling: usize) -> usize {
+    if sibling < SWATCH_TOKENS.len() {
         sibling
     } else {
         1 + (sibling - SWATCH_TOKENS.len()) % (SWATCH_TOKENS.len() - 1)
-    };
-    canvas_var(SWATCH_TOKENS[index])
+    }
 }
 
 /// The ids of the rows that close an open subtree: a descendant row whose next

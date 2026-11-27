@@ -69,7 +69,7 @@ impl TreeLevel {
     #[must_use]
     fn row_level(self) -> RowLevel {
         match self {
-            TreeLevel::Parent => RowLevel::Parent,
+            TreeLevel::Parent => RowLevel::Branch,
             TreeLevel::Leaf => RowLevel::Leaf,
         }
     }
@@ -252,13 +252,12 @@ pub fn TreeRow(props: TreeRowProps) -> Element {
     }
 
     // The row box (design D3): the level's height, the row padding over the
-    // depth's inset, the tight gap, the subtree's fill, and the selection's fill
-    // and corner radius. The subtree's last row takes the divider the open
-    // parent gave up.
+    // depth's inset, the tight gap, the subtree's fill, and the selection's
+    // fill over square corners (`gui-tree-row-roles` design D7). The subtree's
+    // last row takes the divider the open parent gave up.
     let mut row_style = format!(
-        "height: {height}px; box-sizing: border-box; padding: 0 {ROW_PADDING_PX}px; padding-left: {}px; gap: {NESTED_GAP_PX}px; border: 0; border-radius: {}px; text-align: left; font-size: {}px; cursor: pointer;",
+        "height: {height}px; box-sizing: border-box; padding: 0 {ROW_PADDING_PX}px; padding-left: {}px; gap: {NESTED_GAP_PX}px; border: 0; border-radius: 0; text-align: left; font-size: {}px; cursor: pointer;",
         props.depth.inset(),
-        row_level.selection_radius(props.selected),
         level.font_px()
     );
     // The row's fill (gui-row-hover-actions design D2) lives on the host as

@@ -1,12 +1,16 @@
-//! The shared row vocabulary (`gui-unified-list-rows` design D1, D4): the rules
-//! every Library and Playlists row part derives its look from, and the row
-//! constants. [`RowLevel`] names the level a part paints and derives the
-//! title's tone and weight and the selection's fill and corner radius from
-//! it, so no part and no list restates a tone; a row that carries a play state
-//! derives its title look from [`RowPlay`](crate::window::components::play_mark::RowPlay),
-//! the one played-state rule; [`context_press`]
-//! is the one right-press handler. [`thumb`] holds the art thumb both parts paint, [`flat`] the
-//! top-level row, and [`tree`] the nested parent and leaf rows.
+//! The shared row vocabulary (`gui-unified-list-rows` design D1, D4;
+//! `gui-tree-row-roles` design D1, D7): the rules every Library and Playlists
+//! row part derives its look from, and the row constants. [`RowLevel`] names
+//! the level a part paints and derives the title's tone and weight and the
+//! selection's fill from it, so no part and no list restates a tone; a row
+//! that carries a play state derives its title look from
+//! [`RowPlay`](crate::window::components::play_mark::RowPlay), the one
+//! played-state rule; the selection paints square at every level, because the
+//! leaf well's corners clip the leaf's fill and a branch fills its row
+//! (design D7). [`context_press`] is the one right-press handler. [`thumb`]
+//! holds the art thumb the parts paint, [`flat`] the top-level row,
+//! [`branch`] the branch row, [`leaf`] the leaf row, and [`tree`] the nested
+//! part the two role parts replace.
 //!
 //! A part names its level and its play state, and never a look value: a
 //! destination that restyles a row changes this module, and a list that passes
@@ -21,7 +25,9 @@ use crate::window::input::f32_from_f64;
 use crate::window::library::LIBRARY_ROW_TITLE_WEIGHT;
 use crate::window::theme::canvas_var;
 
+pub mod branch;
 pub mod flat;
+pub mod leaf;
 pub mod thumb;
 pub mod tree;
 
@@ -29,7 +35,9 @@ pub use crate::window::library::list::{
     BRANCH_ROW_HEIGHT, LIBRARY_ROW_HEIGHT, NODE_ROW_HEIGHT, TRACK_ROW_HEIGHT, WELL_GAP_BOTTOM_PX,
     WELL_GAP_TOP_PX, WellEdge,
 };
+pub use branch::{BranchRow, BranchRowProps};
 pub use flat::FlatRow;
+pub use leaf::{LeafRow, LeafRowProps};
 pub use thumb::{LibraryRowThumb, paint_thumb};
 pub use tree::{TreeDepth, TreeLevel, TreeRow, TreeTrail};
 
@@ -65,10 +73,6 @@ pub const THUMB_ICON_PX: u16 = 16;
 /// (gui-delineated-rows design D2).
 pub const THUMB_PROGRESS_PX: f32 = 3.0;
 
-/// The corner radius of a selected nested row, in logical pixels
-/// (`gui-unified-list-rows` design D3).
-const SELECTED_RADIUS_PX: f32 = 4.0;
-
 /// The trailing text's hook part: the date gutter or the duration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LibraryTrailPart {
@@ -89,43 +93,38 @@ impl LibraryTrailPart {
     }
 }
 
-/// The level a row part paints (`gui-unified-list-rows` design D2, D3): a
-/// top-level row, a nested parent, or a nested leaf. The selection fill is one
-/// fill at every level; the title tone and the selection's corner radius are
-/// what the level decides.
+/// The level a row part paints (`gui-unified-list-rows` design D2, D3;
+/// `gui-tree-row-roles` design D1, D7): a top-level row, a branch row, or a
+/// leaf row. The selection fill is one fill at every level and paints square;
+/// the title tone is what the level decides.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RowLevel {
     /// A top-level row: every flat row and a top-level tree parent (an artist,
     /// a series, a playlist).
     Top,
-    /// A nested parent row: an album and a season.
-    Parent,
+    /// A branch row: an album and a season (`gui-tree-row-roles` design D1).
+    Branch,
     /// A nested leaf row: a track, an episode, and a playlist item.
     Leaf,
 }
 
 impl RowLevel {
     /// The title's tone (`gui-unified-list-rows` design D4;
-    /// gui-played-row-marks design D1): a row that carries a play state paints
-    /// the tone [`RowPlay`] derives from it; a row that carries none paints its
-    /// level's tone, which is the text tone on a top-level or parent row and
-    /// the muted tone on a leaf.
+    /// gui-played-row-marks design D1; `gui-tree-row-roles` design D7): a row
+    /// that carries a play state paints the tone [`RowPlay`] derives from it;
+    /// a row that carries none paints the text tone at every level.
     #[must_use]
     pub fn title_tone(self, play: Option<&GuiHomeRowStateFrame>) -> String {
         if let Some(play) = play {
             return RowPlay::of_row(play).title_tone().to_owned();
         }
-        if self == RowLevel::Leaf {
-            canvas_var("muted")
-        } else {
-            canvas_var("text")
-        }
+        canvas_var("text")
     }
 
     /// The title's weight (gui-played-row-marks design D1, D4): a row that
     /// carries a play state paints the weight [`RowPlay`] derives from it; a
     /// row that carries none keeps its level's present weight — the Library
-    /// title weight on a top-level row, 400 on a parent, and the leaf weight
+    /// title weight on a top-level row, 400 on a branch, and the leaf weight
     /// on a leaf.
     #[must_use]
     pub fn title_weight(self, play: Option<&GuiHomeRowStateFrame>) -> f32 {
@@ -134,7 +133,7 @@ impl RowLevel {
         }
         match self {
             RowLevel::Top => LIBRARY_ROW_TITLE_WEIGHT,
-            RowLevel::Parent => 400.0,
+            RowLevel::Branch => 400.0,
             RowLevel::Leaf => LEAF_ROW_FONT_WEIGHT,
         }
     }
@@ -144,18 +143,6 @@ impl RowLevel {
     #[must_use]
     pub fn selection_fill(self, selected: bool) -> Option<String> {
         selected.then(|| canvas_var("library-raise"))
-    }
-
-    /// The selection's corner radius in logical pixels
-    /// (`gui-unified-list-rows` design D2, D3): a top-level row keeps square
-    /// corners, and a nested row rounds them only while the selection marks it.
-    #[must_use]
-    pub fn selection_radius(self, selected: bool) -> f32 {
-        if selected && self != RowLevel::Top {
-            SELECTED_RADIUS_PX
-        } else {
-            0.0
-        }
     }
 }
 
