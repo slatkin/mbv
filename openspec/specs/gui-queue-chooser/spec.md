@@ -101,7 +101,7 @@ While the local Owner plays nothing and a local Named queue is shown, Play SHALL
 
 ### Requirement: Edits and enqueue reach the shown queue
 
-Every queue edit, enqueue, play-next, and whole-queue replacement from the GUI Client SHALL reach the shown entry: the shown local Named queue, or the shown peer's queue. A replacement of a resting local queue SHALL make it current and play it, as a replacement does today. The confirmation before a populated queue is replaced SHALL apply to the shown queue. An undo SHALL send its inverse edit to the queue that the undone edit reached, whichever entry is shown.
+Every queue edit, enqueue, play-next, and whole-queue replacement from the GUI Client SHALL reach the shown entry: the shown local Named queue, or the shown peer's queue. A replacement of a resting local queue SHALL make it current and play it, as a replacement does today. A replacement of a populated queue SHALL run without a confirmation prompt (user decision 2026-11-27: no confirmation stands before a queue replacement), and it SHALL still apply to the shown queue. An undo SHALL send its inverse edit to the queue that the undone edit reached, whichever entry is shown.
 
 #### Scenario: Enqueue to a resting queue
 

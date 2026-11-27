@@ -202,14 +202,13 @@ pub(crate) enum PendingQueueAction {
     ClearQueue,
 }
 
-/// Which queue-replacement executor runs once the populated-queue gate is
-/// confirmed. `Pending` is the plain `execute_queue_replacement` path.
-/// `PlaylistsSidebar` runs it, then closes the Playlists sidebar and focuses
-/// the Queue so the replaced queue is visible. `Routed` carries its entry
-/// point's pre-play prep, because `play_items_routed` never replaces the
-/// playback queue itself — every routed caller does its own mutation around
-/// it, and they differ.
-#[derive(Debug)]
+/// Which queue-replacement executor runs a resolved replacement. `Pending`
+/// is the plain `execute_queue_replacement` path. `PlaylistsSidebar` runs it,
+/// then closes the Playlists sidebar and focuses the Queue so the replaced
+/// queue is visible. `Routed` carries its entry point's pre-play prep,
+/// because `play_items_routed` never replaces the playback queue itself —
+/// every routed caller does its own mutation around it, and they differ.
+#[derive(Clone, Copy, Debug)]
 pub(in crate::app) enum ReplacementExecutor {
     Routed(RoutedReplacementPrep),
     Pending,

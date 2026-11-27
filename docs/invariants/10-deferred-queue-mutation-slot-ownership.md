@@ -2,12 +2,16 @@
 
 ## The invariant
 
-`QueueDeferrals` in `mbv_client_core::state::queue_deferrals` owns the three deferred
-queue mutations: the save/discard deferral, the gated populated-queue
-replacement, and the local-play deferral. Its private fields and transition
-methods keep each payload in its own lifecycle: save completion requires the
-bound mutation ID, the gated replacement is taken only on confirmation, and
+`QueueDeferrals` in `mbv_client_core::state::queue_deferrals` owns the deferred
+queue mutation that waits on a user prompt: the local-play deferral. Its
+private field and transition methods keep the payload in its own lifecycle:
 local play is taken only on its confirmation.
+
+The save/discard deferral and the gated populated-queue replacement left
+`QueueDeferrals` when their prompts were removed (user decision 2026-11-27:
+every queue replacement runs without a confirmation or save/discard prompt).
+A queue replacement executes through `request_queue_replacement` at once; the
+"play locally instead" prompt is the only prompt that can still hold one.
 
 ## Why it matters
 
@@ -19,7 +23,6 @@ mixups while preserving the intended prompt-specific behavior.
 ## What remains unenforced
 
 The transition methods are named for their callers (for example,
-`take_on_save_complete` and `take_confirmed_replacement`), but visibility
-cannot prevent another `App` method from calling a transition it does not
-own. That caller-to-transition discipline remains conventional rather than
-type-enforced.
+`take_confirmed_local_play`), but visibility cannot prevent another `App`
+method from calling a transition it does not own. That caller-to-transition
+discipline remains conventional rather than type-enforced.

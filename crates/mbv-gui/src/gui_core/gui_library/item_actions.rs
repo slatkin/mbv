@@ -198,7 +198,7 @@ fn play_artist_albums(
         );
         return;
     }
-    app.play_music_albums(albums, shuffle, false);
+    app.play_music_albums(albums, shuffle);
 }
 
 /// Play the artist page's track `track_id` (gui-music-artist-page design
@@ -262,7 +262,7 @@ pub(in crate::gui_core::gui_library) fn play_library_item(
         else {
             return;
         };
-        app.play_folder_gated(&item.id, ct, false);
+        app.play_folder_gated(&item.id, ct);
         return;
     }
     if !is_playable(&item) {

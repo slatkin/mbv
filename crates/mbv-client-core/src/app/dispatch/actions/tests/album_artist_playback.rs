@@ -87,9 +87,6 @@ fn album_track_cache_still_precedes_the_artist_cache_fallback() {
     // activated row) must not hide the artist group the row came from.
     app.seed_album_track_items_for_test("album-1", Vec::new());
     assert!(app.play_album_track("album-1", &only));
-    // The second activation targets a populated queue, so it goes through the
-    // replacement gate before the queue changes.
-    confirm_replace_queue(&mut app);
     let (mut replaced, _) = last_replace(&cmd_rx);
     replaced.sort();
     assert_eq!(

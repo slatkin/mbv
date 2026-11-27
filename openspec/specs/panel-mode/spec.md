@@ -286,7 +286,7 @@ requirement SHALL NOT apply.
 When mbv runs in the pinned panel at its expanded width and a user action starts playback now,
 mbv SHALL collapse the panel to its queue view, as `x` does from the expanded width. The collapse
 SHALL start only after the Owner accepts the queue replacement, and at most one time per action.
-It SHALL apply to every output. Enqueue, a refused or cancelled play, and a play at the collapsed
+It SHALL apply to every output. Enqueue, a refused play, and a play at the collapsed
 width SHALL NOT change the view. A refused collapse SHALL NOT stop playback.
 
 #### Scenario: Play collapses the expanded panel
@@ -313,12 +313,6 @@ width SHALL NOT change the view. A refused collapse SHALL NOT stop playback.
 - **WHEN** mbv runs in the pinned panel at its expanded width and the user enqueues an item
 - **THEN** the item appends to the queue and the panel stays at its expanded width with the
   library view
-
-#### Scenario: A cancelled replace keeps the expanded view
-
-- **WHEN** mbv runs in the pinned panel at its expanded width, the user plays into a populated
-  queue, and cancels the replace confirmation
-- **THEN** nothing plays and the panel stays at its expanded width with the library view
 
 #### Scenario: A rejected replace keeps the expanded view
 

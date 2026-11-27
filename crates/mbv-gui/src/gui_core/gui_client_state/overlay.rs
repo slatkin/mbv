@@ -432,10 +432,9 @@ impl GuiCore {
         }
     }
 
-    /// The shared confirmation modal's key rules: Enter accepts, Esc
-    /// cancels, and the three-way dirty-playlist prompt's `d` discards — the
-    /// TUI's Confirm component (`confirm_intent_for_key`) rule for rule.
-    /// Every other chord is consumed and the modal stays up.
+    /// The shared confirmation modal's key rules: Enter accepts and Esc
+    /// cancels — the TUI's Confirm component (`confirm_intent_for_key`) rule
+    /// for rule. Every other chord is consumed and the modal stays up.
     fn apply_gui_confirm_key(&mut self, key: KeyEvent) -> bool {
         let Some(GuiOverlay::Confirm(modal)) = &self.gui.overlay else {
             return false;
@@ -444,15 +443,6 @@ impl GuiCore {
         let answering = match key.code {
             Key::Enter => Some(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
             Key::Esc => Some(KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
-            Key::Char('d')
-                if key.modifiers.is_empty()
-                    && matches!(
-                        action,
-                        mbv_ui_model::confirm::ConfirmAction::DiscardOrSaveDirtyPlaylist
-                    ) =>
-            {
-                Some(KeyEvent::new(Key::Char('d'), KeyModifiers::NONE))
-            }
             _ => None,
         };
         if let Some(key) = answering {

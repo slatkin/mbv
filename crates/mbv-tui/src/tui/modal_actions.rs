@@ -132,11 +132,6 @@ impl Model {
 /// Whether answering `action` with `key` should also close the modal. Only
 /// the keys an action actually answers on dismiss it; any other key is a
 /// no-op that leaves the modal open.
-fn confirm_key_dismisses(action: &ConfirmAction, key: Key) -> bool {
-    match action {
-        ConfirmAction::DiscardOrSaveDirtyPlaylist => {
-            matches!(key, Key::Char('s' | 'S' | 'd' | 'D') | Key::Esc)
-        }
-        _ => matches!(key, Key::Enter | Key::Esc),
-    }
+fn confirm_key_dismisses(_action: &ConfirmAction, key: Key) -> bool {
+    matches!(key, Key::Enter | Key::Esc)
 }

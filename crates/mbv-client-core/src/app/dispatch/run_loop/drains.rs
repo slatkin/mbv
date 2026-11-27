@@ -410,7 +410,7 @@ impl App {
             match action.as_str() {
                 "clear:yes" => {
                     self.dismiss_confirm();
-                    self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
+                    self.execute_pending_queue_action(PendingQueueAction::ClearQueue);
                 }
                 "__notif_failed__" => {
                     self.notif_failed = true;

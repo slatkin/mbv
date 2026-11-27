@@ -249,7 +249,6 @@ fn enqueue_unplayable_selection_keeps_append_submission_without_prompt() {
     );
 
     assert!(!app.queue_deferrals.has_local_play());
-    assert!(!app.queue_deferrals.is_save_deferred());
     assert!(app.pending_overlay.is_none());
     assert_eq!(
         app.local_view.emby_items(),

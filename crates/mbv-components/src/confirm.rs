@@ -116,10 +116,10 @@ impl Component for ConfirmComponent {
 
 impl ConfirmComponent {
     fn key_result(&self, key: &tuirealm::event::KeyEvent) -> LeafKeyResult {
-        let Some(action) = self.on_confirm.as_ref() else {
+        if self.on_confirm.is_none() {
             return LeafKeyResult::Unhandled;
-        };
-        let Some(intent) = confirm_intent_for_key(action, key.code) else {
+        }
+        let Some(intent) = confirm_intent_for_key(key.code) else {
             return LeafKeyResult::Unhandled;
         };
         LeafKeyResult::Consumed(Some(Box::new(confirm_msg(intent))))
@@ -150,9 +150,9 @@ impl ConfirmComponent {
     /// The intent a click on `buttons[index]` emits: press the pill's first
     /// key.
     fn button_intent(&self, index: usize) -> Option<Msg> {
-        let action = self.on_confirm.as_ref()?;
+        self.on_confirm.as_ref()?;
         let key = button_keys(&self.buttons.get(index)?.keys).next()?;
-        let intent = confirm_intent_for_key(action, key)?;
+        let intent = confirm_intent_for_key(key)?;
         Some(confirm_msg(intent))
     }
 }
@@ -188,20 +188,13 @@ impl AppComponent<Msg, UserEvent> for ConfirmComponent {
     }
 }
 
-/// The intent a key produces for `action`. Only Enter and Esc answer a
-/// confirmation; every other key (including the old `y`/`n`/`s`/`c`) is a
-/// no-op, so the modal stays open. The three-way dirty-playlist prompt adds
-/// `d` for its distinct Discard answer.
-fn confirm_intent_for_key(action: &ConfirmAction, key: Key) -> Option<ConfirmIntent> {
+/// The intent a key produces. Only Enter and Esc answer a confirmation;
+/// every other key (including the old `y`/`n`/`s`/`c`) is a no-op, so the
+/// modal stays open.
+fn confirm_intent_for_key(key: Key) -> Option<ConfirmIntent> {
     match key {
-        Key::Enter => Some(match action {
-            ConfirmAction::DiscardOrSaveDirtyPlaylist => ConfirmIntent::Save,
-            _ => ConfirmIntent::Accept,
-        }),
+        Key::Enter => Some(ConfirmIntent::Accept),
         Key::Esc => Some(ConfirmIntent::Cancel),
-        Key::Char('d' | 'D') if matches!(action, ConfirmAction::DiscardOrSaveDirtyPlaylist) => {
-            Some(ConfirmIntent::Discard)
-        }
         _ => None,
     }
 }
@@ -263,28 +256,10 @@ mod tests {
     }
 
     #[rstest]
-    #[case::clear_queue_unknown_key_is_a_noop(Key::Char('x'), ConfirmAction::ClearQueue, None)]
-    #[case::clear_queue_enter_accepts(
-        Key::Enter,
-        ConfirmAction::ClearQueue,
-        Some(ConfirmIntent::Accept)
-    )]
-    #[case::dirty_playlist_enter_saves(
-        Key::Enter,
-        ConfirmAction::DiscardOrSaveDirtyPlaylist,
-        Some(ConfirmIntent::Save)
-    )]
-    #[case::dirty_playlist_discard(
-        Key::Char('d'),
-        ConfirmAction::DiscardOrSaveDirtyPlaylist,
-        Some(ConfirmIntent::Discard)
-    )]
-    fn action_specific_key_intents(
-        #[case] key: Key,
-        #[case] action: ConfirmAction,
-        #[case] expected: Option<ConfirmIntent>,
-    ) {
-        assert_eq!(confirm_intent_for_key(&action, key), expected);
+    #[case::clear_queue_unknown_key_is_a_noop(Key::Char('x'), None)]
+    #[case::clear_queue_enter_accepts(Key::Enter, Some(ConfirmIntent::Accept))]
+    fn key_intents(#[case] key: Key, #[case] expected: Option<ConfirmIntent>) {
+        assert_eq!(confirm_intent_for_key(key), expected);
     }
 
     #[test]

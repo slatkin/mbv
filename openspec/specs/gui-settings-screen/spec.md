@@ -410,7 +410,7 @@ The Playlists section SHALL list the saved Emby playlists and SHALL let the user
 #### Scenario: Playing a playlist
 
 - **WHEN** the user plays a playlist
-- **THEN** the queue is replaced with the playlist's playable items, after the TUI's populated-queue prompt where it applies
+- **THEN** the queue is replaced with the playlist's playable items, without a confirmation prompt
 
 #### Scenario: Renaming a playlist
 

@@ -133,7 +133,6 @@ fn library_autoplay_on_a_populated_queue_does_not_raise_the_replace_modal() {
         ),
         "library autoplay is never gated"
     );
-    assert!(!app.queue_deferrals.has_gated_replacement());
     // The queue itself changes only through the owner's answer (row 5.3):
     // this stub owner is legacy, so the view keeps its last accepted state
     // and the optimistic replacement content is not asserted here.

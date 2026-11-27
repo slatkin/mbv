@@ -5,40 +5,6 @@ Define one queue and playback-submission model shared by every QueueItem across 
 
 ## Requirements
 
-### Requirement: A queue replacement deferred behind the unsaved-playlist prompt runs only through that prompt's answer
-
-When a queue replacement would discard unsaved changes to the queue's saved playlist, the system SHALL hold the replacement and ask the user to save, discard, or cancel. Discard SHALL run the held replacement immediately. Cancel SHALL drop it. Save SHALL start one playlist save and bind the held replacement to that save. The held replacement SHALL run only when that bound save completes successfully for the same queue and playlist. If the bound save fails or cannot start, the held replacement SHALL be dropped. No other playlist save SHALL run it, including an automatic save after consume, a save on quit, or a later manual save. If the prompt is closed without an answer, the held replacement SHALL never run. Replacements held by the populated-queue confirmation and by the "play locally instead" prompt SHALL run only from their own prompt's confirmation.
-
-#### Scenario: Save answer runs the replacement after its save
-
-- **WHEN** the user answers Save on the unsaved-playlist prompt
-- **AND** the save it started completes successfully
-- **THEN** the held replacement SHALL run
-
-#### Scenario: Prompt closed without an answer
-
-- **WHEN** the unsaved-playlist prompt is closed by something other than the user's answer
-- **AND** a later automatic save of the same playlist completes successfully
-- **THEN** the held replacement SHALL NOT run
-
-#### Scenario: Another save completes first
-
-- **WHEN** the user answers Save while an earlier save of the same playlist is still in flight
-- **AND** that earlier save completes successfully
-- **THEN** the held replacement SHALL NOT run until the save started by the answer completes
-
-#### Scenario: Bound save fails
-
-- **WHEN** the save started by the Save answer fails
-- **THEN** the held replacement SHALL NOT run
-- **AND** a later successful save of the same playlist SHALL NOT run it
-
-#### Scenario: Save completion with a gated replacement outstanding
-
-- **WHEN** a replacement awaits the populated-queue confirmation
-- **AND** a playlist save completes
-- **THEN** the gated replacement SHALL NOT run until the user confirms that prompt
-
 ### Requirement: Each queue has one canonical ordered representation
 
 Every Composed or Bound queue SHALL be represented by one ordered collection of queue slots containing `QueueItem` values. A Player owner SHALL hold the only authoritative collection for its Bound queue. A Client MAY hold a replaceable snapshot of a Bound queue, and a Playback run MAY hold an mpv execution projection, but neither SHALL independently decide canonical order, active slot, revision, or queue mutation outcome. A component SHALL NOT maintain parallel item-kind collections whose synchronization is required to determine queue contents, order, length, or current slot. An mpv projection MAY contain the full playable sequence or only the active materialized file as required by source lifecycle, but that projection SHALL NOT become queue authority. A Cast receiver output SHALL hold only the active slot's item. An Emby Session output SHALL hold only the active slot's item and the next playable slot's item, and a list that the owner hands over at exit. Neither SHALL become queue authority. A populate-only queue replacement MAY update a Client's Composed queue without submitting it to an owner only when that Client does not present the queue as the Stay-alive process's queue. A Client presenting the Stay-alive queue SHALL display only owner-accepted contents, including the queue source; no owner operation installs a queue without starting playback, so staged content reaches that owner only when explicit play submits a replacement. Until explicit play submits a Composed replacement to another playback target, the Client SHALL NOT present an unconfirmed slot from that replacement as the playing slot.
@@ -582,30 +548,25 @@ The Stay-alive process SHALL hold the queue source as part of its queue state. E
 - **THEN** the Client SHALL show an error
 - **AND** no server playlist SHALL be created, updated, or deleted
 
-### Requirement: User-initiated queue replacements confirm before replacing a populated queue
-When the user explicitly picks content to replace the playback queue, the system SHALL ask for confirmation before replacing that queue if it is populated. An empty target queue SHALL be replaced without the prompt. This applies to album and artist track plays, playlist loads, shuffle-folder plays, context-menu Play and Shuffle, and grouped-tree track plays. It SHALL NOT apply to library autoplay, single-item play, or replays that restore existing session state. Cancelling SHALL leave the queue and playback unchanged. After confirmation, the replacement SHALL behave exactly as it did before this gate existed, including any later "play locally instead" or unsaved-playlist prompt.
+### Requirement: User-initiated queue replacements run without a confirmation prompt
+When the user explicitly picks content to replace the playback queue, the system SHALL replace that queue without asking for confirmation, whether the target queue is populated or empty (user decision 2026-11-27: the user is trusted to make their own replacement decisions). This applies to album and artist track plays, playlist loads, shuffle-folder plays, context-menu Play and Shuffle, and grouped-tree track plays, as it does to library autoplay, single-item play, and replays that restore existing session state. A replacement whose items cannot play on the attached owner SHALL still raise the "play locally instead" prompt. Replacing the queue SHALL also discard unsaved changes to the queue's saved playlist without the save/discard prompt; the user's own save commands remain the way to keep those edits.
 
 #### Scenario: Album track play over a populated queue
 - **WHEN** the queue is populated and the user plays a track from an album
-- **THEN** confirmation is requested before the queue is replaced
-- **AND** cancelling leaves the queue and playback unchanged
+- **THEN** the queue is replaced without a confirmation prompt
 
 #### Scenario: Playlist load over a populated queue
 - **WHEN** the queue is populated and the user loads a playlist
-- **THEN** confirmation is requested before the playlist replaces the queue
+- **THEN** the playlist replaces the queue without a confirmation prompt
 
-#### Scenario: Empty queue plays immediately
-- **WHEN** the queue is empty and the user plays an album track, shuffles a folder, or loads a playlist
-- **THEN** no replace-queue confirmation is shown
-
-#### Scenario: Confirmation precedes later prompts
+#### Scenario: Unplayable items still fall through to local play
 - **WHEN** the queue is populated and the chosen items cannot play on the attached owner
-- **THEN** the replace-queue confirmation is shown first
-- **AND** only after confirming is the "play locally instead" prompt shown
+- **THEN** the "play locally instead" prompt is shown
 
-#### Scenario: Autoplay and single-item play are not gated
-- **WHEN** the queue is populated and library autoplay starts, or the user plays a single movie or episode
-- **THEN** no replace-queue confirmation is shown
+#### Scenario: A dirty saved playlist's edits are discarded without a prompt
+- **WHEN** the queue is bound to a saved playlist with unsaved edits and the user plays content that replaces the queue
+- **THEN** the queue is replaced without a save/discard prompt
+- **AND** the unsaved edits are discarded
 
 ### Requirement: Recorded progress follows one rule per observation kind
 

@@ -55,7 +55,7 @@ Selecting or restoring a node without a direct user expand/collapse action (laun
 - **AND** a track without an index number uses its position within the album
 
 ### Requirement: Artist roots and album leaves have distinct navigation
-Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. With no tree filter active, Enter on an artist root SHALL open or focus that root's Hero — the Wide artist Workspace where the Wide hero arrangement applies, otherwise the Library Hero overlay with that artist-track Workspace focused — exactly as Enter on an album leaf opens its Hero; Enter SHALL NOT toggle expansion. While the tree filter is active, Enter on an artist root SHALL retain the filter's local expansion behavior and SHALL NOT open the Library Hero overlay. Right on a collapsed artist root SHALL expand it; Right on an already expanded artist root SHALL enter its artist-track Workspace, opening the Library Hero overlay first in non-Wide geometry. Left SHALL collapse a focused expanded artist root, or move a focused album leaf to its artist parent. Enter on an album leaf SHALL retain the existing album activation behavior; when filtering is active, it SHALL first dismiss the filter and focus the album in the unfiltered tree before enabling album-track selection. Enter on a track item SHALL invoke the library playback policy for that Audio item through the existing playback and admission executor. With autoload enabled, the replacement queue SHALL contain that track's cached album tracks in disc/track order and start at the selected track; with autoload disabled, it SHALL contain only the selected track. When the target queue that playback would replace is populated, Enter SHALL ask for confirmation before replacing it; an empty target queue SHALL play immediately. Album-leaf and artist-root navigation and activation behaviors SHALL be unchanged by the presence of track items. Page navigation SHALL operate on the tree's visible-node viewport and SHALL NOT inherit Heading-based canonical-list group jumps.
+Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. With no tree filter active, Enter on an artist root SHALL open or focus that root's Hero — the Wide artist Workspace where the Wide hero arrangement applies, otherwise the Library Hero overlay with that artist-track Workspace focused — exactly as Enter on an album leaf opens its Hero; Enter SHALL NOT toggle expansion. While the tree filter is active, Enter on an artist root SHALL retain the filter's local expansion behavior and SHALL NOT open the Library Hero overlay. Right on a collapsed artist root SHALL expand it; Right on an already expanded artist root SHALL enter its artist-track Workspace, opening the Library Hero overlay first in non-Wide geometry. Left SHALL collapse a focused expanded artist root, or move a focused album leaf to its artist parent. Enter on an album leaf SHALL retain the existing album activation behavior; when filtering is active, it SHALL first dismiss the filter and focus the album in the unfiltered tree before enabling album-track selection. Enter on a track item SHALL invoke the library playback policy for that Audio item through the existing playback and admission executor. With autoload enabled, the replacement queue SHALL contain that track's cached album tracks in disc/track order and start at the selected track; with autoload disabled, it SHALL contain only the selected track. The replacement SHALL run without a confirmation prompt, whether the target queue is populated or empty (user decision 2026-11-27). Album-leaf and artist-root navigation and activation behaviors SHALL be unchanged by the presence of track items. Page navigation SHALL operate on the tree's visible-node viewport and SHALL NOT inherit Heading-based canonical-list group jumps.
 
 #### Scenario: Collapse removes descendants from navigation
 - **WHEN** the user collapses a focused artist root
@@ -96,14 +96,13 @@ Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. 
 - **AND** both paths use the existing playback and admission executor
 - **AND** artist-root and album-leaf behaviors are unchanged
 
-#### Scenario: Track Enter confirms queue replacement
+#### Scenario: Track Enter replaces a populated queue directly
 - **WHEN** the user presses Enter on a track item and the target queue is populated
-- **THEN** confirmation is requested before that queue is replaced
-- **AND** cancelling leaves the queue and playback unchanged
+- **THEN** that queue is replaced without a confirmation prompt
 
 #### Scenario: Track Enter with an empty queue plays immediately
 - **WHEN** the user presses Enter on a track item and the target queue is empty
-- **THEN** playback starts immediately: the empty target queue skips the queue-replacement confirmation prompt, while the save/discard protection for an unsaved local queue change still applies as it does for every other queue-replacing flow
+- **THEN** playback starts immediately
 
 #### Scenario: Hero and Workspace remain the full-album surface
 - **WHEN** track items are visible in the tree
@@ -169,7 +168,7 @@ The mounted Music destination SHALL remain the sole event boundary. Keyboard pre
 - **THEN** prior row geometry claims no pointer target
 
 ### Requirement: Tree double-click expands an expandable node and plays a track
-A double-click on a Grouped Music tree node SHALL toggle the persistent expansion of an expandable node: an artist root, or an album leaf with cached track children. This SHALL apply both with and without the local tree filter active; filter-forced visibility remains in effect until filtering closes. An album leaf without cached track children SHALL claim the gesture without changing state. None of those gestures SHALL open a Hero. A double-click on a track item SHALL use the same album-track resolution and playback executor as the tree's Enter chord, after the same populated-queue confirmation gate. When the target queue that playback would replace is populated, that activation SHALL ask for confirmation before replacing it, regardless of whether the target Player owner is local or directly controlled; an empty target queue SHALL skip the queue-replacement confirmation, while the save/discard protection that guards an unsaved local queue change SHALL still apply on the local path as it does for every other queue-replacing flow. Grouped Music tree double-click SHALL NOT perform the ordinary album-leaf activation or open the Library Hero overlay.
+A double-click on a Grouped Music tree node SHALL toggle the persistent expansion of an expandable node: an artist root, or an album leaf with cached track children. This SHALL apply both with and without the local tree filter active; filter-forced visibility remains in effect until filtering closes. An album leaf without cached track children SHALL claim the gesture without changing state. None of those gestures SHALL open a Hero. A double-click on a track item SHALL use the same album-track resolution and playback executor as the tree's Enter chord. The replacement SHALL run without a confirmation prompt, whether the target queue is populated or empty and whether the target Player owner is local or directly controlled (user decision 2026-11-27). Grouped Music tree double-click SHALL NOT perform the ordinary album-leaf activation or open the Library Hero overlay.
 
 #### Scenario: Double-click expands an artist root
 - **WHEN** the user double-clicks an artist root
@@ -182,11 +181,11 @@ A double-click on a Grouped Music tree node SHALL toggle the persistent expansio
 #### Scenario: Double-click a track plays it
 - **WHEN** the user double-clicks a track item
 - **THEN** playback of that item is requested
-- **AND** a populated queue prompts for confirmation first
+- **AND** the queue is replaced without a confirmation prompt
 
 #### Scenario: Double-click a track with an empty queue plays immediately
 - **WHEN** the user double-clicks a track item while the queue is empty
-- **THEN** playback starts immediately: the empty target queue skips the queue-replacement confirmation prompt, while the save/discard protection for an unsaved local queue change still applies as it does for every other queue-replacing flow
+- **THEN** playback starts immediately
 
 #### Scenario: Filtered double-click keeps tree semantics
 - **WHEN** the local tree filter is active and the user double-clicks a visible artist root, album leaf, or track item

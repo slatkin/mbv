@@ -1,16 +1,14 @@
-use crate::app::SidebarId;
 use crate::app::{
-    App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueLink,
-    SavePlaylistDialog, SavePlaylistStage,
+    App, ConfirmAction, ConfirmModal, PendingQueueAction, QueueLink, SavePlaylistDialog,
+    SavePlaylistStage,
 };
 use mbv_ui_msg::{Key, KeyEvent};
 
 impl App {
     /// Shared dispatcher for the confirmation modal: matches on which
     /// `ConfirmAction` is pending and re-uses each action's existing effect.
-    /// Only Enter (and `d`/Esc on the dirty-playlist prompt, Esc on the
-    /// session-switch hand-off fork) answers; every other key is a no-op
-    /// that leaves the modal mounted.
+    /// Only Enter (and Esc on the session-switch hand-off fork) answers;
+    /// every other key is a no-op that leaves the modal mounted.
     pub fn apply_confirm_action(&mut self, action: ConfirmAction, key: KeyEvent) -> bool {
         match action {
             ConfirmAction::ClearQueue => self.confirm_clear_queue(key),
@@ -39,14 +37,6 @@ impl App {
                 self.confirm_replace_audiobookshelf(generation, key);
             }
             ConfirmAction::PlayLocallyInstead => self.confirm_play_locally(key),
-            ConfirmAction::DiscardOrSaveDirtyPlaylist => {
-                self.confirm_discard_or_save_dirty_playlist(key);
-            }
-            // Only this arm calls `QueueDeferrals::take_confirmed_replacement`;
-            // save completion calls `take_on_save_complete` for its bound mutation.
-            ConfirmAction::ReplacePopulatedQueue => {
-                self.confirm_replace_populated_queue(key);
-            }
             // queue-handoff-and-take design D1: the confirmed transfer runs its
             // staged flow (attach a link opened for it, copy, arm the pending
             // transfer); every other key cancels and drops an opened link.
@@ -84,7 +74,7 @@ impl App {
 
     fn confirm_clear_queue(&mut self, key: KeyEvent) {
         if key.code == Key::Enter {
-            self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
+            self.execute_pending_queue_action(PendingQueueAction::ClearQueue);
         }
     }
 
@@ -168,50 +158,6 @@ impl App {
                 self.queue_deferrals.cancel_local_play();
             }
             _ => {}
-        }
-    }
-
-    /// Enter saves the dirty playlist, `[d]` discards it and runs the pending
-    /// queue action (restoring the Queue panel and dismissing the playlists
-    /// sidebar when that action was a play), and Esc cancels. The shell
-    /// receives `ConfirmIntent::Save`/`Discard`/`Cancel`, translated to
-    /// `s`/`d`/Esc in `Model::handle_confirm_intent`.
-    fn confirm_discard_or_save_dirty_playlist(&mut self, key: KeyEvent) {
-        let play_after = self.queue_deferrals.save_answer_is_play();
-        match key.code {
-            Key::Char('s' | 'S') => {
-                let mutation_id = self.save_playlist_to_emby();
-                self.queue_deferrals.bind_to_save(mutation_id);
-            }
-            Key::Char('d' | 'D') => {
-                if let Some(action) = self.queue_deferrals.take_on_discard() {
-                    self.execute_pending_queue_action(action);
-                }
-                if play_after {
-                    self.request_sidebar_dismiss(SidebarId::Playlists);
-                    self.set_panel_focus(PanelFocus::Queue);
-                }
-            }
-            Key::Esc => {
-                self.queue_deferrals.cancel_save_answer();
-            }
-            _ => {}
-        }
-    }
-
-    /// Confirming the populated-queue gate hands the stored payload back to
-    /// the one queue-replacement executor; every other key cancels, so no
-    /// executable payload can fire at a later step.
-    fn confirm_replace_populated_queue(&mut self, key: KeyEvent) {
-        match key.code {
-            Key::Enter => {
-                if let Some((action, via)) = self.queue_deferrals.take_confirmed_replacement() {
-                    self.run_replacement(action, &via);
-                }
-            }
-            _ => {
-                self.queue_deferrals.cancel_gated_replacement();
-            }
         }
     }
 

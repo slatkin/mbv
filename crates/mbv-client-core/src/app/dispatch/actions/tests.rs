@@ -3,22 +3,13 @@ use crate::app::LibEvent;
 use crate::app::dispatch::library::browse::{
     build_album_index_with, recursive_album_search_eligible,
 };
-use crate::app::tests::{install_test_emby, make_app_stub};
+use crate::app::tests::make_app_stub;
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::browse::{AlbumIndexState, AlbumPathPart, BrowseLevel};
 use mbv_ui_model::library_tab::LibraryTab;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::tab_selection::TabSelection;
 use std::collections::HashMap;
-
-/// Confirm the armed queue-replacement ask, as the Enter key's own dispatch
-/// does: the shared replacement gate runs the routed replacement.
-fn confirm_replace_queue(app: &mut App) {
-    app.apply_confirm_action(
-        mbv_ui_model::confirm::ConfirmAction::ReplacePopulatedQueue,
-        mbv_ui_msg::KeyEvent::new(mbv_ui_msg::Key::Enter, mbv_ui_msg::KeyModifiers::NONE),
-    );
-}
 
 fn folder(id: &str, name: &str) -> EmbyItem {
     let mut item = make_item(name, "Folder");
@@ -84,6 +75,3 @@ mod album_artist_playback;
 /// Recursive album-index build, traversal and activation-path tests.
 #[cfg(test)]
 mod album_index;
-/// Populated/empty-queue replacement-gate tests for album-track and folder plays.
-#[cfg(test)]
-mod replacement_gate;

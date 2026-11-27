@@ -521,14 +521,6 @@ impl App {
         let _ = self.images.reserve_fetch(req, 0);
     }
 
-    /// Whether an album-track replacement waits behind the confirm gate, as a
-    /// play on a populated target queue leaves it.
-    #[cfg(any(test, feature = "test"))]
-    #[must_use]
-    pub fn has_gated_replacement_for_test(&self) -> bool {
-        self.queue_deferrals.has_gated_replacement()
-    }
-
     /// Adopt `items` as the direct remote link's projected queue, starting at
     /// `cursor`, as the peer's snapshot leaves it. The fixture keeps a target
     /// queue: a test that adopts into it holds a routed peer.

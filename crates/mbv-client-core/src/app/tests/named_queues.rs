@@ -363,11 +363,10 @@ fn replacement_of(items: &[EmbyItem]) -> PendingQueueAction {
 }
 
 /// The GUI Client shows a populated resting `Kids` while the current `Default`
-/// queue is empty, so a replacement asks before it discards the shown rows
-/// (spec `gui-queue-chooser` "The confirmation before a populated queue is
-/// replaced SHALL apply to the shown queue").
+/// queue is empty, so the replacement reaches the shown resting queue (user
+/// request 2026-11-27: no confirmation stands before a replacement).
 #[test]
-fn a_populated_resting_queue_asks_before_the_replacement() {
+fn a_populated_resting_queue_takes_the_replacement_without_asking() {
     let (mut app, _cmd_rx) = app_with_adopted_named_queues();
     app.show_named_queue(resting());
     app.adopt_named_queue_snapshot(resting(), &resting_snapshot(&make_items(2)));
@@ -375,15 +374,7 @@ fn a_populated_resting_queue_asks_before_the_replacement() {
 
     app.request_queue_replacement(replacement_of(&make_items(1)), ReplacementExecutor::Pending);
 
-    assert!(
-        matches!(
-            &app.pending_overlay,
-            Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal))
-                if modal.on_confirm == crate::app::ConfirmAction::ReplacePopulatedQueue
-        ),
-        "the shown resting queue's rows are about to go, so the replacement asks first"
-    );
-    assert!(app.queue_deferrals.has_gated_replacement());
+    assert!(app.pending_overlay.is_none());
 }
 
 /// The GUI Client shows an empty resting `Kids` while a populated `Default`
@@ -404,7 +395,6 @@ fn an_empty_resting_queue_takes_the_replacement_without_asking() {
         app.pending_overlay.is_none(),
         "an empty shown queue needs no confirmation"
     );
-    assert!(!app.queue_deferrals.has_gated_replacement());
     let sent = cmd_rx
         .try_recv()
         .expect("the confirmed-empty replacement reaches the shown queue");
@@ -415,11 +405,11 @@ fn an_empty_resting_queue_takes_the_replacement_without_asking() {
     );
 }
 
-/// A dirty saved playlist holding the playhead does not raise its save prompt
-/// for a replacement of another queue: the save would take the current queue's
-/// edits and the replacement discards the shown resting queue instead.
+/// A replacement of the shown resting queue runs directly, even while the
+/// current queue's dirty saved playlist would have raised its save prompt
+/// (user request 2026-11-27: no prompt stands before a replacement).
 #[test]
-fn a_resting_queue_replacement_skips_the_current_queue_save_prompt() {
+fn a_resting_queue_replacement_runs_without_the_current_queue_save_prompt() {
     let (mut app, cmd_rx) = app_with_adopted_named_queues();
     app.show_named_queue(resting());
     app.adopt_named_queue_snapshot(resting(), &resting_snapshot(&[]));
@@ -434,14 +424,10 @@ fn a_resting_queue_replacement_skips_the_current_queue_save_prompt() {
 
     app.request_queue_replacement(replacement_of(&make_items(1)), ReplacementExecutor::Pending);
 
-    assert!(
-        !app.queue_deferrals.is_save_deferred(),
-        "the current queue's unsaved edits are not the ones the replacement discards"
-    );
     assert!(app.pending_overlay.is_none());
     let sent = cmd_rx
         .try_recv()
-        .expect("the replacement runs instead of prompting to save");
+        .expect("the replacement runs without prompting to save");
     assert_eq!(sent_replace_queue(&sent), Some(resting()));
 }
 

@@ -65,7 +65,7 @@ impl App {
     /// # Panics
     ///
     /// Panics when the Emby client lock is poisoned.
-    pub fn play_music_albums(&mut self, albums: Vec<EmbyItem>, shuffle: bool, confirm: bool) {
+    pub fn play_music_albums(&mut self, albums: Vec<EmbyItem>, shuffle: bool) {
         let Some(client) = self.emby_client() else {
             self.flash(
                 "Emby is unavailable".into(),
@@ -108,29 +108,18 @@ impl App {
             mbv_queue::QueueSource::Unknown
         };
         // Keep the Library focused: `play_items_routed` only moves focus when
-        // the caller is not already in the Library panel. The gate defers the
-        // single composed replacement and its save to `run_replacement`. The
-        // confirm follows the folder play's gate (add-gui-library-panel): the
-        // TUI's path keeps the populated-queue confirm, and the GUI Library's
-        // explicit play and shuffle replace directly — the saved-playlist
-        // prompt a dirty playlist owes still raises through
-        // `replace_queue_or_prompt`.
+        // the caller is not already in the Library panel. The replacement
+        // runs at once (user request 2026-11-27: no confirmation stands
+        // before a queue replacement).
         let action = PendingQueueAction::PlayItems {
             items,
             start_idx: 0,
             source,
         };
-        if confirm {
-            self.request_queue_replacement(
-                action,
-                ReplacementExecutor::Routed(RoutedReplacementPrep::MusicAlbums),
-            );
-        } else {
-            self.run_replacement(
-                action,
-                &ReplacementExecutor::Routed(RoutedReplacementPrep::MusicAlbums),
-            );
-        }
+        self.request_queue_replacement(
+            action,
+            ReplacementExecutor::Routed(RoutedReplacementPrep::MusicAlbums),
+        );
     }
 
     /// Play one artist's fetched tracks from the top (emby-favourites design
@@ -151,27 +140,20 @@ impl App {
     }
 
     /// `collection_type` is the source library's Emby collection type; it
-    /// labels the confirmed replacement with `QueueSource::Collection`. The
-    /// source is set inside the gated confirmed path (via the action), never
-    /// here, so cancelling the prompt leaves the queue source unchanged
-    /// (design D4).
+    /// labels the replacement with `QueueSource::Collection`. The source is
+    /// set inside the action the executor carries, never here.
     pub(in crate::app) fn play_folder(&mut self, folder_id: &str, collection_type: String) {
-        self.play_folder_gated(folder_id, collection_type, true);
+        self.play_folder_gated(folder_id, collection_type);
     }
 
-    /// The folder play with the populated-queue confirm controlled by the
-    /// caller (add-gui-library-panel, the GUI Library's explicit Play): the
-    /// TUI's path keeps the confirm (`confirm` true), and the GUI Library's
-    /// Play replaces the queue directly — the confirm modal is a TUI overlay
-    /// the GUI Client never paints, so a GUI play gated behind it would be
-    /// swallowed. The local saved-playlist protection stays: the run still
-    /// goes through `replace_queue_or_prompt`, which raises the save/discard
-    /// prompt a dirty saved playlist owes.
+    /// The folder play every Client runs (add-gui-library-panel): the
+    /// replacement runs at once, so no caller needs to pick a confirm path
+    /// any more (user request 2026-11-27).
     ///
     /// # Panics
     ///
     /// Panics when the Emby client lock is poisoned.
-    pub fn play_folder_gated(&mut self, folder_id: &str, collection_type: String, confirm: bool) {
+    pub fn play_folder_gated(&mut self, folder_id: &str, collection_type: String) {
         let Some(client) = self.emby_client() else {
             self.flash(
                 "Emby is unavailable".into(),
@@ -194,17 +176,10 @@ impl App {
                     start_idx: 0,
                     source: mbv_queue::QueueSource::Collection { collection_type },
                 };
-                if confirm {
-                    self.request_queue_replacement(
-                        action,
-                        ReplacementExecutor::Routed(RoutedReplacementPrep::Folder),
-                    );
-                } else {
-                    self.run_replacement(
-                        action,
-                        &ReplacementExecutor::Routed(RoutedReplacementPrep::Folder),
-                    );
-                }
+                self.request_queue_replacement(
+                    action,
+                    ReplacementExecutor::Routed(RoutedReplacementPrep::Folder),
+                );
             }
             Err(e) => {
                 drop(client);

@@ -107,7 +107,7 @@ The system SHALL perform rename and delete API calls on background threads and S
 
 ### Requirement: Play a playlist from the playlists panel
 
-Enter SHALL replace the queue with the playlist's playable items and start playback. In the list view the target is the selected playlist and playback starts at its first item. In the open-playlist view the target is the open playlist and playback starts at the selected item. The queue SHALL stay bound to that playlist. A non-empty queue SHALL show the existing replace-queue confirmation first. Enter SHALL NOT load the playlist without starting playback.
+Enter SHALL replace the queue with the playlist's playable items and start playback. In the list view the target is the selected playlist and playback starts at its first item. In the open-playlist view the target is the open playlist and playback starts at the selected item. The queue SHALL stay bound to that playlist. The replacement SHALL run without a confirmation prompt (user decision 2026-11-27: no confirmation stands before a queue replacement). Enter SHALL NOT load the playlist without starting playback.
 
 #### Scenario: Enter on a playlist row plays it
 
@@ -121,11 +121,10 @@ Enter SHALL replace the queue with the playlist's playable items and start playb
 - **THEN** the queue SHALL contain the whole playlist in playlist order, with the playlist as its source
 - **AND** playback SHALL start at the third item
 
-#### Scenario: Populated queue asks first
+#### Scenario: Populated queue is replaced directly
 
 - **WHEN** the user presses Enter on a playlist while the queue has items
-- **THEN** the replace-queue confirmation SHALL appear
-- **AND** cancelling it SHALL leave the queue and playback unchanged and the panel open
+- **THEN** the queue SHALL be replaced without a confirmation prompt
 
 #### Scenario: Empty playlist
 
@@ -134,7 +133,7 @@ Enter SHALL replace the queue with the playlist's playable items and start playb
 
 ### Requirement: Shuffle a playlist from the playlists panel
 
-`s` in either playlists-panel view SHALL replace the queue with all of the target playlist's playable items in random order and start playback at the first shuffled item. The resulting queue SHALL NOT be bound to the playlist, so its order SHALL never be saved back to the playlist. A non-empty queue SHALL show the existing replace-queue confirmation first.
+`s` in either playlists-panel view SHALL replace the queue with all of the target playlist's playable items in random order and start playback at the first shuffled item. The resulting queue SHALL NOT be bound to the playlist, so its order SHALL never be saved back to the playlist. The replacement SHALL run without a confirmation prompt.
 
 #### Scenario: Shuffle a playlist row
 
@@ -154,7 +153,7 @@ Enter SHALL replace the queue with the playlist's playable items and start playb
 
 ### Requirement: Enqueue from the playlists panel
 
-`a` SHALL append to the end of the current queue without starting or interrupting playback and without the replace-queue confirmation. In the list view it SHALL append all playable items of the selected playlist in playlist order. In the open-playlist view it SHALL append only the selected item. The current queue's source SHALL NOT change. If that queue is bound to a saved playlist, the appended items SHALL make that playlist dirty, as any other append does.
+`a` SHALL append to the end of the current queue without starting or interrupting playback. In the list view it SHALL append all playable items of the selected playlist in playlist order. In the open-playlist view it SHALL append only the selected item. The current queue's source SHALL NOT change. If that queue is bound to a saved playlist, the appended items SHALL make that playlist dirty, as any other append does.
 
 #### Scenario: Enqueue a whole playlist
 

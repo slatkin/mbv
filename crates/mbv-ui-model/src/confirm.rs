@@ -23,7 +23,6 @@ pub enum ConfirmAction {
         existing_id: String,
         name: String,
     },
-    DiscardOrSaveDirtyPlaylist,
     PlayLocallyInstead,
     DeletePlaylist {
         id: String,
@@ -34,14 +33,6 @@ pub enum ConfirmAction {
     ReplaceEmby(mbv_core::service_runtime::SetupGeneration),
     RemoveAudiobookshelf,
     ReplaceAudiobookshelf(mbv_core::service_runtime::SetupGeneration),
-    /// Design D6: a resolved queue replacement that would discard a populated
-    /// target queue. The payload is the already-resolved
-    /// `QueueDeferrals::take_confirmed_replacement` transition, so confirming
-    /// executes exactly that action through the existing playback/admission
-    /// executor and cannot re-resolve into a second one. Save ownership stays
-    /// with `QueueDeferrals::bind_to_save` and
-    /// `QueueDeferrals::take_on_save_complete`.
-    ReplacePopulatedQueue,
     /// queue-handoff-and-take design D1/D2: the user answered the transfer
     /// prompt that asks before a Hand off replaces a populated peer queue
     /// (Take is row 8.1). The key names the target the prompt was raised
