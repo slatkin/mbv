@@ -138,6 +138,7 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
         collection_type: String::new(),
         runtime_ticks: 30 * mbv_emby_model::TICKS_PER_SECOND,
         played: false,
+        is_favorite: false,
         playback_position_ticks: 0,
         series_id: String::new(),
         series_name: String::new(),

@@ -118,6 +118,11 @@ pub struct EmbyItem {
     pub collection_type: String,
     pub runtime_ticks: i64,
     pub played: bool,
+    /// The item's per-user favourite flag (`UserData.IsFavorite`). `Default`
+    /// so legacy serialized queue items (which predate the field) deserialize
+    /// unchanged as not favourite; an older Owner ignores the field on decode.
+    #[serde(default)]
+    pub is_favorite: bool,
     pub playback_position_ticks: i64,
     pub series_id: String,
     pub series_name: String,
@@ -218,6 +223,29 @@ impl EmbyItem {
     /// facts carry no meaning anywhere: a row derived from a music item is
     /// always ordinary, and only the row that is actually playing shows
     /// anything.
+    /// Whether this item's type can carry the per-user favourite flag: the
+    /// Emby web client's `canRate` type exclusions (`Season`, `Folder`,
+    /// `CollectionFolder`, `UserView`, `Channel`, `Program`, `Timer`,
+    /// `SeriesTimer`, `Studio`, `Tag`). This is the only place the rule lives. It does not test
+    /// `UserData` presence: every mbv list fetch asks for `UserData`, so mbv
+    /// items carry it whenever they come from a list fetch.
+    #[must_use]
+    pub fn supports_favourite(&self) -> bool {
+        !matches!(
+            self.item_type.as_str(),
+            "Season"
+                | "Folder"
+                | "CollectionFolder"
+                | "UserView"
+                | "Channel"
+                | "Program"
+                | "Timer"
+                | "SeriesTimer"
+                | "Studio"
+                | "Tag"
+        )
+    }
+
     #[must_use]
     pub fn is_music(&self) -> bool {
         self.item_type == "MusicAlbum" || self.item_type == "MusicArtist" || self.is_audio()
@@ -312,6 +340,7 @@ impl EmbyItem {
             media_type: String::new(),
             runtime_ticks: 0,
             played: false,
+            is_favorite: false,
             playback_position_ticks: 0,
             series_id: String::new(),
             series_name: String::new(),

@@ -82,6 +82,7 @@ pub(crate) fn emby_queue_item() -> QueueItem {
         collection_type: String::new(),
         runtime_ticks: 1_800_000_000,
         played: false,
+        is_favorite: false,
         playback_position_ticks: 0,
         series_id: EMBY_SERIES_ID.to_owned(),
         series_name: "Conformance Series".to_owned(),
