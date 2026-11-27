@@ -1,16 +1,18 @@
 //! The Library Hero (`replace-tauri-with-blitz` task 7.5, the port of
 //! `LibraryHero`; add-gui-library-panel design D5, D8): the canvas's
-//! detail pane for the picked album — the artist header with Shuffle artist,
-//! the album block with its square artwork and its Play, Enqueue, and
-//! More actions controls, and the album's tracklist. The Wide
+//! detail pane for the picked album — the artist header, the album block with
+//! its square artwork and its Play, Shuffle, Enqueue, and More actions
+//! controls, and the album's tracklist. The Wide
 //! arrangement paints it as the pane beside the list, and the Narrow
 //! arrangement paints the very same painters inside its overlay (design D4),
 //! so the two cannot drift.
 //!
 //! Every control sends the command the core applies through its existing App
-//! action (design D8): Play, Shuffle, and Enqueue name stable
-//! Service ids, and Shuffle artist names the artist's albums in the current
-//! union. The Hero's controls paint their key (`a`).
+//! action (design D8): Play, Shuffle, and Enqueue name stable Service ids.
+//! Shuffle follows the Hero's subject — the album branch shuffles the picked
+//! album alone, as the album's own menu Shuffle does, and the artist branch
+//! shuffles every album of the artist page. The Hero's controls paint their
+//! key (`a`).
 //!
 //! More actions opens the picked item's menu: the core builds the entries and
 //! the frame carries them, so the window paints what the core can run. The
@@ -23,7 +25,7 @@ use dioxus_native::prelude::*;
 use crate::art::backdrop::{BackdropStyle, baked_width};
 use crate::art::{GuiArtRef, backdrop_from_art};
 use crate::bridge::frame::library::{
-    GuiArtShapeFrame, GuiLibraryDetail, GuiMetaKindFrame, GuiMetaSegmentFrame, GuiMusicArtistFrame,
+    GuiArtShapeFrame, GuiLibraryDetail, GuiMetaKindFrame, GuiMetaSegmentFrame,
     GuiMusicArtistPageFrame, GuiMusicDetail, GuiMusicHeroFrame, GuiMusicHeroSubjectFrame,
     GuiMusicMenuEntryFrame,
 };
@@ -37,8 +39,8 @@ use crate::window::components::library_panel::row_menu_entries;
 use crate::window::components::library_tracklist::LibraryTracklist;
 use crate::window::components::queue_row_menu::QueueRowMenu;
 use crate::window::icons::Ellipsis;
-use crate::window::library::hero::{album_pills, artist_page_pills, artist_union_albums};
-use crate::window::library::parts::{library_music_detail, library_music_list};
+use crate::window::library::hero::{album_pills, artist_page_pills};
+use crate::window::library::parts::library_music_detail;
 use crate::window::sections::SectionRef;
 
 use crate::window::library::state::LibraryState;
@@ -79,15 +81,13 @@ fn add_album_to_queue(library: &LibraryState, album_id: &str) {
     });
 }
 
-/// Shuffle the artist (design D8): the albums of the current union, played
-/// shuffled.
-fn shuffle_artist(
-    library: &LibraryState,
-    artists: &[GuiMusicArtistFrame],
-    hero: &GuiMusicHeroFrame,
-) {
-    library.link.library(GuiLibraryCommand::ShuffleArtist {
-        album_ids: artist_union_albums(artists, hero),
+/// Shuffle the picked album (design D8): the album's own menu Shuffle entry,
+/// which plays the album's items shuffled and leaves the rest of the artist
+/// alone. The Hero names the album, so the entry resolves the same action the
+/// album's right-click menu runs.
+fn shuffle_album(library: &LibraryState, album_id: &str) {
+    library.link.library(GuiLibraryCommand::Shuffle {
+        row: crate::gui_core::GuiLibraryMenuRow::Item(album_id.to_owned()),
     });
 }
 
@@ -111,18 +111,6 @@ fn press_menu_entry(library: &LibraryState, album_id: &str, index: usize) {
     run_menu_entry(library, album_id, index);
 }
 
-/// The Music pair the shuffle reads at press time: the union's artists and
-/// the picked album's Hero facts, cloned once per press — the closure reads
-/// the current frame, so a Hero repaint never clones the union's albums or
-/// the tracklist for it (the 7.3-7.4 review's whole-list finding).
-fn current_union(library: &LibraryState) -> Option<(Vec<GuiMusicArtistFrame>, GuiMusicHeroFrame)> {
-    let list = library.sections.library_list.peek();
-    let detail = library.sections.library_detail.peek();
-    let list = library_music_list(list.as_deref())?;
-    let hero = library_music_detail(detail.as_deref())?.hero.as_ref()?;
-    Some((list.artists.clone(), hero.clone()))
-}
-
 /// Play the artist page (gui-music-artist-page design D6): every album of the
 /// page, in the page's order — the core's walk fetches what a still-loading
 /// album needs, so the command names the albums alone.
@@ -140,11 +128,18 @@ fn add_artist_to_queue(library: &LibraryState, album_ids: &[String]) {
     });
 }
 
+/// Shuffle the artist page (gui-music-artist-page design D6): every album of
+/// the page, played shuffled.
+fn shuffle_artist_page(library: &LibraryState, album_ids: &[String]) {
+    library.link.library(GuiLibraryCommand::ShuffleArtist {
+        album_ids: album_ids.to_vec(),
+    });
+}
+
 /// The Library Hero: it branches on the subject
 /// (gui-music-artist-page design D6) — the album branch paints the artist
-/// header with Shuffle artist, the album block with its square artwork and
-/// its action controls, and the album's tracklist; the artist branch paints
-/// the artist page.
+/// header, the album block with its square artwork and its action controls,
+/// and the album's tracklist; the artist branch paints the artist page.
 #[component]
 pub fn LibraryHero(props: LibraryHeroProps) -> Element {
     let library = consume_context::<LibraryState>();
@@ -176,11 +171,8 @@ fn album_actions_row(
     let play_id = album_id.to_owned();
     let on_play = Callback::new(move |()| play_album(&play_library, &play_id));
     let shuffle_library = library.clone();
-    let on_shuffle = Callback::new(move |()| {
-        if let Some((artists, hero)) = current_union(&shuffle_library) {
-            shuffle_artist(&shuffle_library, &artists, &hero);
-        }
-    });
+    let shuffle_id = album_id.to_owned();
+    let on_shuffle = Callback::new(move |()| shuffle_album(&shuffle_library, &shuffle_id));
     let queue_library = library.clone();
     let queue_id = album_id.to_owned();
     let on_queue = Callback::new(move |()| add_album_to_queue(&queue_library, &queue_id));
@@ -224,9 +216,8 @@ fn album_actions_row(
     }
 }
 
-/// The album branch of the Library Hero: the artist header with Shuffle
-/// artist, the album block with its square artwork and its action controls,
-/// and the album's tracklist.
+/// The album branch of the Library Hero: the artist header, the album block
+/// with its square artwork and its action controls, and the album's tracklist.
 fn album_hero(
     library: &LibraryState,
     detail: &GuiMusicDetail,
@@ -235,9 +226,9 @@ fn album_hero(
     // The Hero's More-actions entries (design D8): the frame carries the
     // shared builder's entries in the builder's order — the order the core's
     // execution rebuild indexes. The entries the Hero's own buttons already
-    // send (the Play entries and the add-to-queue entry) drop at paint time,
-    // so the menu names only what no button offers, and an album whose
-    // remainder is empty hides the control entirely.
+    // send (the Play entries, the album's Shuffle, and the enqueue entry) drop
+    // at paint time, so the menu names only what no button offers, and an
+    // album whose remainder is empty hides the control entirely.
     const HERO_BUTTON_LABELS: [&str; 4] = ["Play", "Play All", "Shuffle", "Enqueue"];
 
     let Some(album) = hero.album() else {
@@ -293,7 +284,7 @@ fn album_hero(
 
 /// The artist branch of the Library Hero (gui-music-artist-page design D6):
 /// the artist page — the header with the artist's fact pills (the year span
-/// among them) and the Shuffle artist action, the block with the artist's
+/// among them), the block with the artist's
 /// name and no rows, the actions row with Play and Enqueue and no
 /// More actions control, the artist's art in the square shape, and the
 /// artist's tracks grouped by album.
@@ -321,17 +312,11 @@ fn artist_hero(
     let queue_library = library.clone();
     let on_queue = Callback::new(move |()| add_artist_to_queue(&queue_library, &queue_ids));
 
-    // Shuffle artist (design D6): the page's albums, played shuffled — the
-    // same send the album branch's union walk builds.
+    // Shuffle (design D6): the page's albums, played shuffled — the whole
+    // artist, unlike the album branch's album-scoped Shuffle.
     let shuffle_ids = album_ids.clone();
     let shuffle_library = library.clone();
-    let on_shuffle = Callback::new(move |()| {
-        shuffle_library
-            .link
-            .library(GuiLibraryCommand::ShuffleArtist {
-                album_ids: shuffle_ids.clone(),
-            });
-    });
+    let on_shuffle = Callback::new(move |()| shuffle_artist_page(&shuffle_library, &shuffle_ids));
 
     // The actions row (design D6): Play and Enqueue over the whole
     // artist. The artist page offers no More actions control — the frame

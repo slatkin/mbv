@@ -1,6 +1,6 @@
 //! The Hero's action buttons (`replace-tauri-with-blitz` task 7.5, the port
-//! of `LibraryHeroActions`; add-gui-library-panel design D15): Play and Add to
-//! queue, each painted only when the destination supplies its handler.
+//! of `LibraryHeroActions`; add-gui-library-panel design D15): Play, Shuffle,
+//! and Enqueue, each painted only when the destination supplies its handler.
 //! The one set every Hero's action row paints, inside the row
 //! `LibraryHeroSummary` or `LibraryHeroFrame` owns, so a fix to one look lands
 //! in every Hero.
@@ -20,12 +20,12 @@ pub struct LibraryHeroActionsProps {
     /// Play the selected row; a destination that paints no play omits it.
     #[props(default)]
     pub on_play: Option<Callback<()>>,
-    /// Add the selected row to the queue.
-    #[props(default)]
-    pub on_queue: Option<Callback<()>>,
     /// Shuffle the selected unit; only a destination that shuffles supplies it.
     #[props(default)]
     pub on_shuffle: Option<Callback<()>>,
+    /// Add the selected row to the queue.
+    #[props(default)]
+    pub on_queue: Option<Callback<()>>,
 }
 
 /// The accent Play pill's style, shared with the Playlists hero. The buttons
@@ -37,10 +37,11 @@ pub(crate) const ACCENT_STYLE: &str = "height: 34px; padding: 0 14px 0 11px; gap
 /// outline and text, for the Playlists hero's Delete.
 pub(crate) const DESTRUCTIVE_STYLE: &str = "height: 34px; padding: 0 12px; gap: 6px; background: none; border: 1px solid var(--canvas-destructive-border); border-radius: 17px; color: var(--canvas-destructive); font-size: 13px; cursor: pointer;";
 
-/// The raised action pill's style: the Add-to-queue button's look.
+/// The raised action pill's style: the Shuffle and Enqueue buttons' look.
 pub(crate) const RAISED_STYLE: &str = "height: 34px; padding: 0 12px; gap: 6px; background: var(--canvas-library-raise); border: 1px solid var(--canvas-library-control); border-radius: 17px; color: var(--canvas-text); font-size: 13px; cursor: pointer;";
 
-/// The Hero's action buttons: the accent Play pill, and the raised
+/// The Hero's action buttons: the accent Play pill, then the raised Shuffle
+/// and Enqueue pills, in that order (user direction 2026-11-27).
 #[component]
 pub fn LibraryHeroActions(props: LibraryHeroActionsProps) -> Element {
     let play_attrs = vec![Attribute::new(own(props.attr, "play"), "", None, false)];
