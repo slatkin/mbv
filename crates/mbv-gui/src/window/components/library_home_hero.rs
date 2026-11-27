@@ -20,6 +20,7 @@ use crate::art::backdrop::BackdropStyle;
 use crate::bridge::frame::library::{GuiHomeHeroFrame, GuiHomeRowIdFrame, GuiLibraryDetail};
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
+use crate::window::components::library_hero_heart::LibraryHeroHeart;
 use crate::window::library::hero::selected_with_hero;
 use crate::window::library::parts::library_home_detail;
 use crate::window::library::state::LibraryState;
@@ -117,6 +118,15 @@ pub fn LibraryHomeHero(props: LibraryHomeHeroProps) -> Element {
     // the bundled placeholder.
     let backdrop = hero_backdrop(hero.art.as_ref(), BackdropStyle::Video);
 
+    // The heart (emby-favourites design D10): the header band's one action,
+    // present exactly while the row's Emby item supports favourites. An
+    // Audiobookshelf or Feed row's Hero carries no heart facts and paints none.
+    let heart = hero.heart.clone().map(|heart| {
+        rsx! {
+            LibraryHeroHeart { heart, hook: "data-library-home-hero-heart" }
+        }
+    });
+
     rsx! {
         LibraryHeroFrame {
             attr: "home",
@@ -130,6 +140,7 @@ pub fn LibraryHomeHero(props: LibraryHomeHeroProps) -> Element {
             overview: hero.overview.clone(),
             cast: hero.cast.clone(),
             backdrop,
+            header_action: heart,
         }
     }
 }

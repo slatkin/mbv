@@ -172,6 +172,11 @@ pub struct GuiHomeHero {
     /// are not directors, in the order Emby gives. Empty on every other
     /// item kind.
     pub cast: Vec<GuiHeroCastMember>,
+    /// The heart control's facts (emby-favourites design D10): the item's id
+    /// and favourite state, present exactly when the item supports
+    /// favourites. `None` for an item whose type never favourites, which
+    /// paints no heart in place of a disabled one.
+    pub heart: Option<super::emby_projection::GuiHeroHeart>,
 }
 
 /// The Hero artwork's box shape, mirroring the artwork policy's declared
@@ -410,6 +415,13 @@ fn home_hero(
         QueueItem::Emby(emby) => hero_cast_emby(app, emby),
         _ => Vec::new(),
     };
+    // The heart is an Emby item's (emby-favourites design D10): a Home row
+    // is never grouped-Music context (design D11), so the item's own rule
+    // alone decides.
+    let heart = match &item.item {
+        QueueItem::Emby(emby) => super::emby_projection::GuiHeroHeart::of_item(emby),
+        _ => None,
+    };
     // The artwork rides the artwork policy's declared source: an Emby source
     // is the fetched chain, an Audiobookshelf cover is the Service-scoped
     // cover the Podcasts and Audiobooks Heroes read, and an undeclared arm (a
@@ -434,6 +446,7 @@ fn home_hero(
         art_shape,
         art,
         cast,
+        heart,
     })
 }
 

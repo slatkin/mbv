@@ -104,7 +104,11 @@ pub(in crate::gui_core::gui_library) fn set_library_view(
         // design D7): a first load when the store holds no list, an in-place
         // refresh when it does. Leaving the view restores the All list
         // untouched, because the All stores are never edited here.
-        GuiLibraryView::Favourites => super::favourites::refetch_favourites(app, gui, lib_idx),
+        GuiLibraryView::Favourites
+        | GuiLibraryView::FavouriteShows
+        | GuiLibraryView::FavouriteEpisodes => {
+            super::favourites::refetch_favourites(app, gui, lib_idx);
+        }
     }
 }
 
@@ -212,6 +216,10 @@ pub(in crate::gui_core::gui_library) fn shows_flat_hero(
         content.facts.artwork.shape,
         art.as_ref(),
     ));
+    let heart = match &item {
+        QueueItem::Emby(emby) => super::emby_projection::GuiHeroHeart::of_item(emby),
+        _ => None,
+    };
     super::GuiShowsHero {
         title: content.facts.title.clone(),
         parent: parts.context.map(|context| context.text),
@@ -220,6 +228,7 @@ pub(in crate::gui_core::gui_library) fn shows_flat_hero(
         art_shape,
         art,
         workspace: None,
+        heart,
     }
 }
 
@@ -265,7 +274,9 @@ pub(in crate::gui_core::gui_library) fn select_shows_row(
         // A Favourites row's pick resolves through the favourites store and
         // lands in the list's own pick, so the Favourites Hero shows it and
         // the All selection is left as it was (emby-favourites design D6).
-        GuiLibraryView::Favourites => {
+        GuiLibraryView::Favourites
+        | GuiLibraryView::FavouriteShows
+        | GuiLibraryView::FavouriteEpisodes => {
             if !super::favourites::select_favourites_row(app, gui, lib_idx, row) {
                 super::log_stale_library_item("showsSelect", row);
             }

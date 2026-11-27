@@ -14,9 +14,9 @@ use dioxus_native::{DioxusDocument, DocumentConfig};
 
 use crate::bridge::frame::GuiPanelToggles;
 use crate::bridge::frame::library::{
-    GuiCollections, GuiDestinationList, GuiEmbyHeroFrame, GuiEmbyRowFrame, GuiEmbyRowKindFrame,
-    GuiFavouritesList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList, GuiLibraryTabFrame,
-    GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame,
+    GuiCollections, GuiDestinationList, GuiEmbyHeroFrame, GuiEmbyList, GuiEmbyRowFrame,
+    GuiEmbyRowKindFrame, GuiFavouritesList, GuiHomeRowStateFrame, GuiLibraryDetail, GuiLibraryList,
+    GuiLibraryTabFrame, GuiMusicAlbumFrame, GuiMusicArtistFrame, GuiMusicDetail, GuiMusicHeroFrame,
     GuiMusicHeroSubjectFrame, GuiMusicList, GuiMusicTrackFrame, GuiRowArtFrame,
     GuiRowMediaKindFrame,
 };
@@ -109,7 +109,6 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
         }],
         current_tab: Some(1),
         destination: GuiDestinationList::Music(GuiMusicList {
-            view: crate::gui_core::GuiLibraryView::All,
             lib_idx: 0,
             collections: GuiCollections {
                 target: crate::gui_core::GuiCollectionTarget::Music(0),
@@ -124,34 +123,34 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
             loading: false,
             failure: None,
             artists,
-            favourites: None,
         }),
     }
 }
 
-/// The Music list section value with the destination's view Favourites
-/// (emby-favourites design D6): the favourites rows ride the list part and the
-/// artist tree is empty, as the core sends it while that view paints.
-fn music_favourites_list(rows: Vec<GuiEmbyRowFrame>) -> GuiLibraryList {
+/// The plain Emby library list section value with the destination's view
+/// Favourites (emby-favourites design D6): the favourites rows ride the list
+/// part and the library's own rows are empty, as the core sends it while that
+/// view paints. A plain Emby library carries the fixture, because a Grouped
+/// Music destination is excluded from favourites everywhere (design D11).
+fn emby_favourites_list(rows: Vec<GuiEmbyRowFrame>) -> GuiLibraryList {
     GuiLibraryList {
         refreshing: false,
         tabs: vec![GuiLibraryTabFrame {
             position: 1,
-            label: "Music".to_owned(),
+            label: "Movies".to_owned(),
         }],
         current_tab: Some(1),
-        destination: GuiDestinationList::Music(GuiMusicList {
+        destination: GuiDestinationList::Emby(GuiEmbyList {
             view: crate::gui_core::GuiLibraryView::Favourites,
+            sort: None,
             lib_idx: 0,
-            collections: GuiCollections {
-                target: crate::gui_core::GuiCollectionTarget::Music(0),
-                all: true,
-                entries: Vec::new(),
-                noun: crate::gui_core::GuiCollectionNoun::Groups,
-            },
+            library_name: "Movies".to_owned(),
+            collections: None,
+            collection_names: Vec::new(),
+            feed_group: false,
             loading: false,
-            failure: None,
-            artists: Vec::new(),
+            failed: false,
+            rows: Vec::new(),
             favourites: Some(GuiFavouritesList {
                 loading: false,
                 rows,
@@ -162,16 +161,16 @@ fn music_favourites_list(rows: Vec<GuiEmbyRowFrame>) -> GuiLibraryList {
     }
 }
 
-/// The Music list section value in the Favourites view with a picked row's Hero
-/// on the list part (emby-favourites design D6): the destination's detail part
-/// carries no Hero while that view paints.
-fn music_favourites_hero_list(hero: bool) -> GuiLibraryList {
+/// The plain Emby library list section value in the Favourites view with a
+/// picked row's Hero on the list part (emby-favourites design D6): the
+/// destination's detail part carries no Hero while that view paints.
+fn emby_favourites_hero_list(hero: bool) -> GuiLibraryList {
     let row = favourite_row("m1", "Alien");
-    let mut list = music_favourites_list(vec![row.clone()]);
-    let GuiDestinationList::Music(music) = &mut list.destination else {
-        panic!("music fixture");
+    let mut list = emby_favourites_list(vec![row.clone()]);
+    let GuiDestinationList::Emby(emby) = &mut list.destination else {
+        panic!("emby fixture");
     };
-    music.favourites = Some(GuiFavouritesList {
+    emby.favourites = Some(GuiFavouritesList {
         loading: false,
         rows: vec![row],
         selected: Some("m1".to_owned()),
@@ -185,6 +184,7 @@ fn music_favourites_hero_list(hero: bool) -> GuiLibraryList {
             art_shape: crate::bridge::frame::library::GuiArtShapeFrame::Landscape,
             art: None,
             cast: Vec::new(),
+            heart: None,
         }),
     });
     list
@@ -664,7 +664,7 @@ fn the_favourites_scroll_and_filter_are_their_own_per_library() {
     let artists: Vec<GuiMusicArtistFrame> = (0..20).map(|index| artist("artist", index)).collect();
     let all = music_list(artists);
     let rows = vec![favourite_row("m1", "Alien"), favourite_row("m2", "Brazil")];
-    let favourites = music_favourites_list(rows.clone());
+    let favourites = emby_favourites_list(rows.clone());
     let (facts, _rx) = run(move |state, facts| {
         carry(state, Some(all.clone()), Some(music_detail(None)));
         state.measure_library_list(40.0);
@@ -712,8 +712,8 @@ fn the_favourites_scroll_and_filter_are_their_own_per_library() {
 /// Favourites view with no Hero opens no overlay.
 #[test]
 fn the_narrow_hero_overlay_opens_for_a_favourites_hero() {
-    let with_hero = music_favourites_hero_list(true);
-    let without_hero = music_favourites_hero_list(false);
+    let with_hero = emby_favourites_hero_list(true);
+    let without_hero = emby_favourites_hero_list(false);
     let (facts, _rx) = run(move |state, facts| {
         carry(state, Some(with_hero.clone()), Some(music_detail(None)));
         state.view_library_detail();

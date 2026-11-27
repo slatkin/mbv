@@ -84,10 +84,10 @@ pub enum PointerList {
     Home,
     /// The Shows list.
     Shows,
-    /// The Favourites list (emby-favourites design D6): the list the Music,
-    /// Shows, and plain Emby destinations paint while their view is
-    /// Favourites, with a scroll store of its own per library. No key handler
-    /// routes it yet, so a key over it acts on no row and scrolls no list.
+    /// The Favourites list (emby-favourites design D6): the list the Shows
+    /// and plain Emby destinations paint while their view is a favourites
+    /// view, with a scroll store of its own per library. Its rows carry
+    /// stable Service ids, so the panel's keys resolve them uniformly.
     Favourites,
     /// A plain Emby library's list.
     Emby,

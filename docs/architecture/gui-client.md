@@ -1038,9 +1038,10 @@ the list's body over the shared column scaffold are then one generic component,
 only its data; `play_next` defaults to no play-next, and only Emby overrides it.
 Home and Shows keep their own list modules (`src/window/library/home_list.rs`,
 `src/window/library/shows_list.rs`): Home's rows carry headings and spacers,
-and Shows' rows carry the New and Upcoming modes. The Favourites view paints
+and Shows' rows carry the New and Upcoming modes. A favourites view paints
 `LibraryFavouritesList` in the list column in place of the destination's own
-list, for Music, Shows, and a plain Emby library alike (see *The Favourites
+list, for Shows and a plain Emby library alike — never for a Grouped Music
+destination, which is excluded from favourites everywhere (see *The Favourites
 view* below). Every list's column wiring
 goes through one scaffold, `library_list_column`
 (`src/window/components/library_list_column.rs`), beside the scroll shell
@@ -1100,12 +1101,16 @@ menu repeated the buttons and offered nothing new.
 The collection dropdown is one component for every destination that has
 collections (gui-collection-dropdown design D6): Music, Podcasts, Feeds, and
 an Emby library in feed-group mode paint it, and no other destination does.
-Every Emby destination paints a separate single-choice view dropdown through
-the same prop-driven dropdown presentation — All, New, Upcoming, and
-Favourites on Shows, All and Favourites elsewhere (emby-favourites design D5)
-— and it is not a collection filter and adds no key. A Music or feed-group
+Every non-music Emby destination paints a separate single-choice view dropdown through
+the same prop-driven dropdown presentation — All, New, Upcoming, Favourite
+Shows, and Favourite Episodes on Shows, All and Favourites on every plain
+library (emby-favourites design D5, D9)
+— and it is not a collection filter and adds no key. A Grouped Music
+destination is excluded from favourites everywhere (design D11): its header
+paints no view dropdown, so the collection dropdown is its only one. A
+feed-group
 header paints the collection dropdown beside the view one; while the view is
-Favourites the collection dropdown does not paint, because Favourites lists
+a favourites view the collection dropdown does not paint, because the view lists
 the whole library. Its closed state is one trigger that
 names the selection — `All`, the one checked collection's name, or the count
 with the destination's noun (`2 folders`) — with a `Clear` control while the
@@ -1499,9 +1504,12 @@ Hero keeps its Service-scoped cover key and is not warmed.
 
 ### The Favourites view
 
-Every Emby destination paints one single-choice view: All, New, Upcoming, and
-Favourites on Shows, All and Favourites on Music and on every plain Emby
-library (emby-favourites design D5). The type is `GuiLibraryView`
+Every non-music Emby destination paints one single-choice view: All, New,
+Upcoming, Favourite Shows, and Favourite Episodes on Shows, All and Favourites
+on every plain Emby
+library, and nothing — no view dropdown at all — on a Grouped Music
+destination, which is excluded from favourites everywhere: no view, no menu
+entry on its rows, and no Hero heart (emby-favourites design D5, D9, D11). The type is `GuiLibraryView`
 (`src/gui_core/gui_library/library_view.rs`), with the store's one getter
 (`library_view`) and the `paints_favourites` predicate beside it; its choices are
 the destination's own (`GuiLibraryView::choices`), the store is keyed by library
@@ -1519,11 +1527,16 @@ The core holds one favourites store per library id (`GuiClientState::favourites`
 (`GuiSectionRequest`: absent, `Requesting`, `Landed`). A worker per fetch runs
 `EmbyClient::get_favourites`, which asks
 `Items?ParentId=<lib>&Recursive=true&Filters=IsFavorite` with the list fields and,
-for a Music library, merges the `/Artists` listing by id; the result lands as
+for a music library, merges the `/Artists` listing by id — a fetch only a
+non-grouped music library can ever start, since a Grouped Music destination
+has no view to enter; the result lands as
 `LibraryFetchEvent::Favourites { library_id, result }`. The list drops an item
 that fails `supports_favourite()` — Emby can return a favourited Season — and
 orders the collections first, then the media items, each by `SortName` (design
-D6, D9), so a TV library lists its Series before its Episodes. A failed first
+D6). The store holds the whole fetch; the projection filters it by the active
+view (design D9): the Shows destination's Favourite Shows view projects the
+Series rows and its Favourite Episodes view the Episode rows, as Emby's own TV
+Favorites tab keeps the two apart. A failed first
 load lands an empty list and a failed in-place refresh keeps the rows already
 held, so the list paints a loading line and no failure line. The projection
 carries the list's own pick per library id (`GuiClientState::favourites_picks`),
@@ -1560,7 +1573,26 @@ The header's Refresh button sends the destination's `refresh` command, which the
 core routes to the favourites refetch while the view is Favourites (design D5),
 and the rows in view report the `Favourites` row art scope so their thumbs fetch
 (gui-delineated-rows design D7). The list's scroller carries its own
-`PointerList::Favourites` marker, so a key over it never acts on an All row.
+`PointerList::Favourites` marker, and the panel's keys route it uniformly
+(design D6): the rows carry stable Service ids, so the movements step the
+list's own scroll (`step_favourites_scroll`), Enter plays the row, and `a`
+queues it, whichever destination paints the view.
+
+### The Hero heart
+
+Every non-music Emby Hero — the plain library's, the Shows one, the Favourites
+one, and a Home row's — paints a heart control in its header band's upper
+right exactly when its item `supports_favourite()` (emby-favourites design
+D10). The facts ride each Hero projection as `GuiHeroHeart` (`item_id`,
+`favourite`) and the frames carry it through unchanged; the shared Hero frame
+exposes the header band's right-end slot (`header_action`), and
+`LibraryHeroHeart` (`src/window/components/library_hero_heart.rs`) is the one
+control every destination passes. A press sends
+`GuiLibraryCommand::SetFavourite`, which runs the menu entry's own write
+through the shared context-action executor, so the heart, the menu entry, and
+every held copy of the item flip together. The Music destination's Hero never
+paints one (design D11), and neither does an item whose type never favourites
+— there is no disabled heart.
 
 ### The `library` command
 

@@ -110,6 +110,7 @@ fn workspace() -> GuiShowsWorkspaceFrame {
 /// season count), its Network row, and its Workspace.
 fn hero(overrides: impl FnOnce(&mut GuiShowsHeroFrame)) -> GuiShowsHeroFrame {
     let mut facts = GuiShowsHeroFrame {
+        heart: None,
         title: "Better Call Saul".to_owned(),
         parent: None,
         facts: GuiHeroFactsFrame {

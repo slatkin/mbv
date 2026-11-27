@@ -182,10 +182,13 @@ impl<'a> LibraryPair<'a> {
     #[must_use]
     pub fn favourites(self) -> Option<&'a GuiFavouritesList> {
         match self {
-            Self::Music(list, _) => list.favourites.as_ref(),
             Self::Shows(list, _) => list.favourites.as_ref(),
             Self::Emby(list, _) => list.favourites.as_ref(),
-            Self::Home(..) | Self::Audiobooks(..) | Self::Podcasts(..) | Self::Feeds(..) => None,
+            Self::Music(..)
+            | Self::Home(..)
+            | Self::Audiobooks(..)
+            | Self::Podcasts(..)
+            | Self::Feeds(..) => None,
         }
     }
 }

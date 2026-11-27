@@ -214,7 +214,6 @@ fn brand() -> GuiMusicArtistFrame {
 /// The carried Music content: both artists, none of them open.
 fn music() -> GuiMusicList {
     GuiMusicList {
-        view: crate::gui_core::GuiLibraryView::All,
         lib_idx: 0,
         collections: GuiCollections {
             target: crate::gui_core::GuiCollectionTarget::Music(0),
@@ -225,7 +224,6 @@ fn music() -> GuiMusicList {
         loading: false,
         failure: None,
         artists: vec![beastie(), brand()],
-        favourites: None,
     }
 }
 

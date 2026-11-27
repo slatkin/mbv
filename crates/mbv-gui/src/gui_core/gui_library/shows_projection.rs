@@ -176,6 +176,11 @@ pub struct GuiShowsHero {
     /// The series Hero's Workspace; `None` while the selected series' detail
     /// has not landed.
     pub workspace: Option<GuiShowsWorkspace>,
+    /// The heart control's facts (emby-favourites design D10): the item's id
+    /// and favourite state, present exactly when the item supports
+    /// favourites. `None` for an item whose type never favourites, which
+    /// paints no heart in place of a disabled one.
+    pub heart: Option<super::emby_projection::GuiHeroHeart>,
 }
 
 /// The Shows projection the GUI Library panel paints (design D12, D8): the
@@ -316,7 +321,9 @@ impl GuiCore {
             // All tree (emby-favourites design D6, D7): no All row, selection,
             // or Hero projects, so no All row paints as a favourite, and the
             // All stores keep what pressing All restores.
-            GuiLibraryView::Favourites => (
+            GuiLibraryView::Favourites
+            | GuiLibraryView::FavouriteShows
+            | GuiLibraryView::FavouriteEpisodes => (
                 Vec::new(),
                 Vec::new(),
                 None,
@@ -568,7 +575,9 @@ pub(crate) fn shows_item(
         GuiLibraryView::New => return super::shows::shows_new_item(gui, item_id),
         // A Favourites id resolves through the favourites store, only while
         // that library's view is Favourites (emby-favourites design D6).
-        GuiLibraryView::Favourites => {
+        GuiLibraryView::Favourites
+        | GuiLibraryView::FavouriteShows
+        | GuiLibraryView::FavouriteEpisodes => {
             let library_id = app.emby_library_id(lib_idx)?;
             return super::favourites::favourites_item(gui, library_id, item_id);
         }

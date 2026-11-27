@@ -127,7 +127,6 @@ fn hero_app(props: FixtureProps) -> Element {
             tabs: Vec::new(),
             current_tab: None,
             destination: GuiDestinationList::Music(GuiMusicList {
-                view: crate::gui_core::GuiLibraryView::All,
                 lib_idx: 0,
                 collections: GuiCollections {
                     target: crate::gui_core::GuiCollectionTarget::Music(0),
@@ -142,7 +141,6 @@ fn hero_app(props: FixtureProps) -> Element {
                 loading: false,
                 failure: None,
                 artists,
-                favourites: None,
             }),
         })));
     // The carried detail, as the core's batch would: `play_library_track`

@@ -144,6 +144,7 @@ const LIB_IDX: usize = 2;
 /// The selected series' detail part, with a series Hero.
 fn shows_detail(episodes: Vec<GuiShowsEpisodeRowFrame>, selected_season: &str) -> GuiShowsDetail {
     let hero = GuiShowsHeroFrame {
+        heart: None,
         title: "Better Call Saul".to_owned(),
         parent: None,
         facts: crate::bridge::frame::library::GuiHeroFactsFrame {

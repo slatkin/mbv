@@ -82,6 +82,7 @@ fn row(label: GuiHeroFactLabelFrame, value: &str) -> GuiHeroFactRowFrame {
 /// no runtime row.
 fn movie_hero(art_shape: GuiArtShapeFrame) -> GuiEmbyHeroFrame {
     GuiEmbyHeroFrame {
+        heart: None,
         title: "Heat".to_owned(),
         facts: GuiHeroFactsFrame {
             pills: vec![

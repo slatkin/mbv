@@ -84,6 +84,11 @@ pub struct LibraryHeroFrameProps {
     /// behind the header and the detail block. `None` paints no backdrop.
     #[props(default)]
     pub backdrop: Option<GuiArtRef>,
+    /// The header band's right-end action (emby-favourites design D10): the
+    /// heart control a favouritable Emby item's Hero passes. `None` paints
+    /// nothing, and the band keeps the title and its pills alone.
+    #[props(default)]
+    pub header_action: Option<Element>,
 }
 
 impl std::fmt::Debug for LibraryHeroFrameProps {
@@ -103,6 +108,7 @@ impl std::fmt::Debug for LibraryHeroFrameProps {
             .field("list_title", &self.list_title)
             .field("children", &self.children.is_some())
             .field("backdrop", &self.backdrop)
+            .field("header_action", &self.header_action.is_some())
             .finish()
     }
 }
@@ -209,6 +215,7 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
         list_title,
         children,
         backdrop,
+        header_action,
     } = props;
 
     let root_attrs = vec![Attribute::new(root, "", None, false)];
@@ -260,6 +267,12 @@ pub fn LibraryHeroFrame(props: LibraryHeroFrameProps) -> Element {
                     }
                     if !header.pills.is_empty() {
                         LibraryHeroPills { attr, hook: "pills", pills: header.pills.clone() }
+                    }
+                }
+                if let Some(header_action) = header_action {
+                    div {
+                        class: "flex flex-none items-start",
+                        { header_action }
                     }
                 }
             }

@@ -31,6 +31,7 @@ pub mod library_hero_cast;
 pub mod library_hero_detail;
 pub mod library_hero_fact_rows;
 pub mod library_hero_frame;
+pub mod library_hero_heart;
 pub mod library_hero_pills;
 pub mod library_hero_section;
 pub mod library_home_hero;

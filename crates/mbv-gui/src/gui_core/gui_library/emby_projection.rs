@@ -84,6 +84,31 @@ pub struct GuiEmbyRow {
     pub state: MediaSemanticState,
 }
 
+/// The Hero heart's facts (emby-favourites design D10): the id the press
+/// names and the state the heart shows. One type serves every Emby Hero, so
+/// the plain, Shows, Favourites, and Home Heroes wire the same control.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GuiHeroHeart {
+    /// The item the press favourites or unfavourites.
+    pub item_id: String,
+    /// Whether the item is a favourite: the heart paints filled while this
+    /// holds, empty while it does not.
+    pub favourite: bool,
+}
+
+impl GuiHeroHeart {
+    /// The heart facts of one item (design D10, D11): `Some` exactly when the
+    /// item supports favourites, so an unsupported item's Hero paints no
+    /// heart. The Grouped Music exclusion never reaches here, because the
+    /// Music destination's Hero is not an Emby-item Hero of this kind.
+    pub(crate) fn of_item(item: &EmbyItem) -> Option<Self> {
+        item.supports_favourite().then(|| Self {
+            item_id: item.id.clone(),
+            favourite: item.is_favorite,
+        })
+    }
+}
+
 /// The Hero's facts for the selected row (row 8.1): the item's facts as the
 /// D1 builders split them — header pills and labelled rows — the movie's
 /// cast, and the artwork at the artwork policy's chain. A plain Emby-library
@@ -109,6 +134,11 @@ pub struct GuiEmbyHero {
     /// are not directors, in the order Emby gives. Empty when the item is
     /// not a movie or carries no people.
     pub cast: Vec<GuiHeroCastMember>,
+    /// The heart control's facts (emby-favourites design D10): the item's id
+    /// and favourite state, present exactly when the item supports
+    /// favourites. `None` for an item whose type never favourites, which
+    /// paints no heart in place of a disabled one.
+    pub heart: Option<GuiHeroHeart>,
 }
 
 /// The plain Emby-library projection the GUI Library panel paints (row 8.1):
@@ -413,6 +443,7 @@ pub(in crate::gui_core::gui_library) fn emby_hero(app: &mut App, item: &EmbyItem
         )),
         art,
         cast,
+        heart: GuiHeroHeart::of_item(item),
     }
 }
 

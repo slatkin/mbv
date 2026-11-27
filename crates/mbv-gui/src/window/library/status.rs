@@ -5,7 +5,7 @@
 //! composes no state of its own: the active destination's list part and detail
 //! part narrow on their kind.
 
-use crate::gui_core::{GuiCollections, GuiLibraryView};
+use crate::gui_core::GuiCollections;
 
 use crate::bridge::frame::library::{
     GuiAudiobooksRowFrame, GuiDestinationList, GuiEmbyRowFrame, GuiEntryRowFrame,
@@ -157,8 +157,10 @@ fn segments_of(
             // no collection selector, so the line names no collection. While
             // the view is Favourites the location names Favourites in its
             // place (emby-favourites design D5).
-            let view_segment =
-                (shows.view == GuiLibraryView::Favourites).then(|| "Favourites".to_owned());
+            let view_segment = shows
+                .view
+                .is_favourites_view()
+                .then(|| shows.view.label().to_owned());
             // The Favourites view's picked row is the list's own pick
             // (emby-favourites design D6).
             let picked = match shows.favourites.as_ref() {
@@ -174,8 +176,8 @@ fn segments_of(
             // place of the collection names (emby-favourites design D5):
             // Favourites lists the whole library, so no collection pick
             // narrows it.
-            if emby.view == GuiLibraryView::Favourites {
-                segments.push(Some("Favourites".to_owned()));
+            if emby.view.is_favourites_view() {
+                segments.push(Some(emby.view.label().to_owned()));
             } else if emby.feed_group {
                 segments.extend(emby.collection_names.iter().cloned().map(Some));
             }
@@ -210,22 +212,8 @@ fn segments_of(
         }
         GuiDestinationList::Music(music) => {
             let mut segments = vec![label];
-            // While the view is Favourites the location names Favourites in
-            // place of the collection names (emby-favourites design D5):
-            // Favourites lists the whole library.
-            if music.view == GuiLibraryView::Favourites {
-                segments.push(Some("Favourites".to_owned()));
-                // The Favourites view's picked row is the list's own pick
-                // (emby-favourites design D6); a frame that carries no
-                // favourites list yet keeps the Hero's own picked name.
-                segments.push(
-                    favourites_picked_title(music.favourites.as_ref())
-                        .or_else(|| picked_name(music_hero(detail))),
-                );
-            } else {
-                segments.extend(music.collections.selected_names().into_iter().map(Some));
-                segments.push(picked_name(music_hero(detail)));
-            }
+            segments.extend(music.collections.selected_names().into_iter().map(Some));
+            segments.push(picked_name(music_hero(detail)));
             segments
         }
     }

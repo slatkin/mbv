@@ -7,7 +7,9 @@
 //! open a destination, and the Library keys run while the pointer rests over
 //! the Library column. Every other key goes to the core.
 
-use crate::bridge::frame::library::{GuiDestinationList, GuiHomeRowIdFrame, GuiSearchFrame};
+use crate::bridge::frame::library::{
+    GuiDestinationList, GuiHomeRowIdFrame, GuiLibraryList, GuiSearchFrame,
+};
 use crate::bridge::keys::{DomKey, KeyTarget};
 use crate::window::input::KeyOutcome;
 use crate::window::pointer_target::{PointerList, PointerTarget, PointerZone};
@@ -383,6 +385,40 @@ fn route_search_key(
     }
 }
 
+/// Route the key a Favourites row takes (emby-favourites design D6): the
+/// movement keys step the painting list's own scroll — the active site's, the
+/// one library whose view is a favourites view — Enter plays the row's item,
+/// and `a` queues it, both through the shared item commands the list's own
+/// press and double-click run. `None` for every other key and while no
+/// favourites view paints, so the destination's routing answers the rest.
+fn route_favourites_row_key(
+    state: &LibraryState,
+    key: &DomKey,
+    pointer: &PointerTarget,
+    list: Option<&GuiLibraryList>,
+) -> Option<KeyOutcome> {
+    if !bare(key) {
+        return None;
+    }
+    let site = crate::window::library::favourites::favourites_site(list)?;
+    if let Some(mv) = cursor_move(&key.key) {
+        state.step_favourites_scroll(site.lib_idx(), mv);
+        return Some(KeyOutcome::Handled);
+    }
+    let item_id = pointer.row.as_deref()?;
+    match key.key.as_str() {
+        "Enter" => {
+            state.play_library_item(item_id);
+            Some(KeyOutcome::Handled)
+        }
+        "a" => {
+            state.queue_library_item(item_id);
+            Some(KeyOutcome::Handled)
+        }
+        _ => None,
+    }
+}
+
 /// Route a key to the active destination's keys (design D2, step 3): the
 /// control the pointer marks acts on it. On Home the Home keys route (design
 /// D12), on a plain Emby library the Emby keys (row 8.1), and the Shows,
@@ -396,6 +432,17 @@ fn route_panel_key(
     pointer: &PointerTarget,
 ) -> KeyOutcome {
     let list = sections.library_list.peek();
+    // The Favourites list's rows carry stable Service ids (emby-favourites
+    // design D6), so the keys the pointer over it takes are uniform across the
+    // destinations that paint it: the movements step the list's own scroll,
+    // Enter plays the row, and `a` queues it. Every other key falls through
+    // to the destination's own routing, whose row resolution answers nothing
+    // for it — Right and Left stay the no-ops a flat list makes them.
+    if pointer.list == Some(PointerList::Favourites)
+        && let Some(outcome) = route_favourites_row_key(state, key, pointer, list.as_deref())
+    {
+        return outcome;
+    }
     match list.as_ref().map(|list| &list.destination) {
         Some(GuiDestinationList::Home(_)) => route_home_panel_key(state, key, pointer),
         Some(GuiDestinationList::Emby(_)) => {

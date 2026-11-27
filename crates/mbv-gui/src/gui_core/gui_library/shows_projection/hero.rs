@@ -123,6 +123,7 @@ impl GuiCore {
             )),
             art,
             workspace,
+            heart: super::super::emby_projection::GuiHeroHeart::of_item(series),
         }
     }
 

@@ -124,7 +124,9 @@ fn row_art_scope(app: &App, gui: &GuiClientState) -> Option<GuiRowArtScope> {
                 // The Favourites view paints the favourites list in place of
                 // the series tree, so its rows are the list's own
                 // (emby-favourites design D6).
-                super::GuiLibraryView::Favourites => GuiRowArtScope::Favourites,
+                super::GuiLibraryView::Favourites
+                | super::GuiLibraryView::FavouriteShows
+                | super::GuiLibraryView::FavouriteEpisodes => GuiRowArtScope::Favourites,
                 super::GuiLibraryView::All => GuiRowArtScope::ShowsSeries,
             })
         }

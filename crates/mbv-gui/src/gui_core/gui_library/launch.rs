@@ -632,7 +632,10 @@ fn date_sort(order: GuiLaunchDateOrder) -> GuiListSort {
 /// not survive a restart, so it saves as All (emby-favourites design D5).
 fn launch_shows_view(view: GuiLibraryView) -> GuiLaunchShowsView {
     match view {
-        GuiLibraryView::All | GuiLibraryView::Favourites => GuiLaunchShowsView::All,
+        GuiLibraryView::All
+        | GuiLibraryView::Favourites
+        | GuiLibraryView::FavouriteShows
+        | GuiLibraryView::FavouriteEpisodes => GuiLaunchShowsView::All,
         GuiLibraryView::New => GuiLaunchShowsView::New,
         GuiLibraryView::Upcoming => GuiLaunchShowsView::Upcoming,
     }

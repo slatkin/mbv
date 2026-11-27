@@ -22,6 +22,7 @@ use crate::art::backdrop::BackdropStyle;
 use crate::bridge::frame::library::{GuiArtShapeFrame, GuiLibraryList};
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
+use crate::window::components::library_hero_heart::LibraryHeroHeart;
 use crate::window::library::favourites::favourites_part;
 use crate::window::library::state::LibraryState;
 use crate::window::sections::SectionRef;
@@ -102,6 +103,14 @@ pub fn LibraryFavouritesHero(props: LibraryFavouritesHeroProps) -> Element {
     };
     let backdrop = hero_backdrop(hero.art.as_ref(), style);
 
+    // The heart (emby-favourites design D10): the header band's one action,
+    // present exactly while the item supports favourites.
+    let heart = hero.heart.clone().map(|heart| {
+        rsx! {
+            LibraryHeroHeart { heart, hook: "data-library-favourites-hero-heart" }
+        }
+    });
+
     rsx! {
         LibraryHeroFrame {
             attr: "favourites",
@@ -115,6 +124,7 @@ pub fn LibraryFavouritesHero(props: LibraryFavouritesHeroProps) -> Element {
             overview: hero.overview.clone(),
             cast: hero.cast.clone(),
             backdrop,
+            header_action: heart,
         }
     }
 }

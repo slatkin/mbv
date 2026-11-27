@@ -25,21 +25,34 @@ pub enum GuiLibraryView {
     /// The library's favourite items (design D5). The choice does not
     /// survive a restart: the launch saves it as All.
     Favourites,
+    /// The TV library's favourite series (design D9): one of the two views
+    /// the Shows destination separates its favourites into, as Emby's TV
+    /// Favorites tab keeps Favorite Shows and Favorite Episodes apart.
+    FavouriteShows,
+    /// The TV library's favourite episodes (design D9).
+    FavouriteEpisodes,
 }
 
 impl GuiLibraryView {
     /// The choices `destination` offers, in the order the dropdown paints
     /// them (design D5): the Shows destination offers its three content
-    /// views and Favourites, and every other Emby destination offers All and
-    /// Favourites. No non-Emby destination paints a view dropdown, so its
-    /// arm names the Emby pair.
+    /// views and the two favourite views, every non-music Emby destination
+    /// offers All and Favourites, and a Grouped Music destination offers
+    /// nothing, because it is excluded from favourites everywhere (design
+    /// D11) and its header paints no view dropdown. No non-Emby destination
+    /// paints a view dropdown either, so its arm names the empty set.
     #[must_use]
     pub fn choices(destination: GuiDestinationKind) -> &'static [Self] {
         match destination {
-            GuiDestinationKind::Shows { .. } => {
-                &[Self::All, Self::New, Self::Upcoming, Self::Favourites]
-            }
-            _ => &[Self::All, Self::Favourites],
+            GuiDestinationKind::Shows { .. } => &[
+                Self::All,
+                Self::New,
+                Self::Upcoming,
+                Self::FavouriteShows,
+                Self::FavouriteEpisodes,
+            ],
+            GuiDestinationKind::Library { .. } => &[Self::All, Self::Favourites],
+            _ => &[],
         }
     }
 
@@ -51,6 +64,8 @@ impl GuiLibraryView {
             Self::New => "new",
             Self::Upcoming => "upcoming",
             Self::Favourites => "favourites",
+            Self::FavouriteShows => "favourite-shows",
+            Self::FavouriteEpisodes => "favourite-episodes",
         }
     }
 
@@ -62,6 +77,8 @@ impl GuiLibraryView {
             Self::New => "Recent",
             Self::Upcoming => "Upcoming",
             Self::Favourites => "Favourites",
+            Self::FavouriteShows => "Favourite Shows",
+            Self::FavouriteEpisodes => "Favourite Episodes",
         }
     }
 
@@ -73,6 +90,8 @@ impl GuiLibraryView {
             "new" => Some(Self::New),
             "upcoming" => Some(Self::Upcoming),
             "favourites" => Some(Self::Favourites),
+            "favourite-shows" => Some(Self::FavouriteShows),
+            "favourite-episodes" => Some(Self::FavouriteEpisodes),
             _ => None,
         }
     }
@@ -86,11 +105,26 @@ pub(crate) fn library_view(gui: &GuiClientState, lib_idx: usize) -> GuiLibraryVi
     gui.library_views.get(&lib_idx).copied().unwrap_or_default()
 }
 
-/// Whether `lib_idx`'s destination paints the Favourites view (emby-favourites
-/// design D5, D6): the one predicate every step that forks on the active view
-/// reads, so the Music, Shows, and plain Emby destinations answer it the same
-/// way.
+impl GuiLibraryView {
+    /// Whether the view is one of the favourites family (design D5, D9):
+    /// Favourites, Favourite Shows, and Favourite Episodes share the
+    /// Favourites list component, the Favourites Hero, the pick, the scroll,
+    /// and every header rule, so every fork but the projection's type filter
+    /// reads this one predicate.
+    #[must_use]
+    pub const fn is_favourites_view(self) -> bool {
+        matches!(
+            self,
+            Self::Favourites | Self::FavouriteShows | Self::FavouriteEpisodes
+        )
+    }
+}
+
+/// Whether `lib_idx`'s destination paints a favourites view (emby-favourites
+/// design D5, D6, D9): the one predicate every step that forks on the active
+/// view reads, so the Music, Shows, and plain Emby destinations answer it the
+/// same way.
 #[must_use]
 pub(crate) fn paints_favourites(gui: &GuiClientState, lib_idx: usize) -> bool {
-    library_view(gui, lib_idx) == GuiLibraryView::Favourites
+    library_view(gui, lib_idx).is_favourites_view()
 }

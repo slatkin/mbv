@@ -51,7 +51,6 @@ fn music_list() -> GuiLibraryList {
         tabs: Vec::new(),
         current_tab: None,
         destination: GuiDestinationList::Music(GuiMusicList {
-            view: crate::gui_core::GuiLibraryView::All,
             lib_idx: 0,
             collections: GuiCollections {
                 target: crate::gui_core::GuiCollectionTarget::Music(0),
@@ -73,7 +72,6 @@ fn music_list() -> GuiLibraryList {
             loading: false,
             failure: None,
             artists: Vec::new(),
-            favourites: None,
         }),
     }
 }
@@ -282,6 +280,7 @@ fn home_content() -> (GuiLibraryList, GuiLibraryDetail) {
     let detail = GuiLibraryDetail::Home(GuiHomeDetail {
         selected: None,
         hero: Some(GuiHomeHeroFrame {
+            heart: None,
             title: "Better Call Saul".to_owned(),
             parent: None,
             facts: crate::bridge::frame::library::GuiHeroFactsFrame {
@@ -366,28 +365,6 @@ fn the_location_joins_the_destination_the_selected_collections_and_the_picked_al
             Some(&music_detail(Some(hero())))
         ),
         "Music › Hip-Hop › Soul › Licensed To Ill"
-    );
-}
-
-// While the view is Favourites the location names Favourites in place of the
-// collection names (emby-favourites design D5, spec "A Favourites view names
-// Favourites"): Favourites lists the whole library, so no group name rides
-// the line.
-#[test]
-fn the_music_favourites_view_names_favourites_in_place_of_the_collections() {
-    let mut list = music_list();
-    let GuiDestinationList::Music(music) = &mut list.destination else {
-        panic!("music fixture");
-    };
-    music.view = crate::gui_core::GuiLibraryView::Favourites;
-    assert_eq!(
-        library_location(
-            &tabs(),
-            Some(1),
-            Some(&list),
-            Some(&music_detail(Some(hero())))
-        ),
-        "Music › Favourites › Licensed To Ill"
     );
 }
 
@@ -528,10 +505,10 @@ fn the_shows_favourites_view_names_favourites_in_place_of_the_view_segment() {
     let GuiDestinationList::Shows(shows) = &mut list.destination else {
         panic!("shows fixture");
     };
-    shows.view = crate::gui_core::GuiLibraryView::Favourites;
+    shows.view = crate::gui_core::GuiLibraryView::FavouriteShows;
     assert_eq!(
         library_location(&[tab(3, "Shows")], Some(3), Some(&list), Some(&detail)),
-        "Shows › Favourites › The Bear"
+        "Shows › Favourite Shows › The Bear"
     );
 }
 

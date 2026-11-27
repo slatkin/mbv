@@ -407,13 +407,11 @@ fn music_list(artists: Vec<GuiMusicArtistFrame>) -> GuiLibraryList {
         }],
         current_tab: Some(1),
         destination: GuiDestinationList::Music(GuiMusicList {
-            view: crate::gui_core::GuiLibraryView::All,
             lib_idx: 0,
             collections: collections(),
             loading: false,
             failure: None,
             artists,
-            favourites: None,
         }),
     }
 }

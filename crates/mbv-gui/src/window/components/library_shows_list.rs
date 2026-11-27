@@ -367,7 +367,13 @@ fn shows_open_in_view(
         Some(GuiLibraryView::All) => open_nodes_in_view(rows, scroll),
         // Only the All view paints a tree: the flat views and the Favourites
         // view report none, so a view change stops the loader.
-        Some(GuiLibraryView::New | GuiLibraryView::Upcoming | GuiLibraryView::Favourites)
+        Some(
+            GuiLibraryView::New
+            | GuiLibraryView::Upcoming
+            | GuiLibraryView::Favourites
+            | GuiLibraryView::FavouriteShows
+            | GuiLibraryView::FavouriteEpisodes,
+        )
         | None => (Vec::new(), Vec::new()),
     }
 }
@@ -382,9 +388,13 @@ fn shows_row_art_scope(view: Option<GuiLibraryView>) -> GuiRowArtScopeFrame {
         // place (emby-favourites design D6), and that list reports the
         // `Favourites` scope, so the All tree's scope stands in here and no
         // fetch names it.
-        Some(GuiLibraryView::All | GuiLibraryView::Favourites) | None => {
-            GuiRowArtScopeFrame::ShowsSeries
-        }
+        Some(
+            GuiLibraryView::All
+            | GuiLibraryView::Favourites
+            | GuiLibraryView::FavouriteShows
+            | GuiLibraryView::FavouriteEpisodes,
+        )
+        | None => GuiRowArtScopeFrame::ShowsSeries,
     }
 }
 

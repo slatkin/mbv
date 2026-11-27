@@ -45,6 +45,9 @@ pub enum GuiLibraryCommand {
         lib_idx: usize,
         view: GuiLibraryView,
     },
+    /// Set or clear the item's favourite state (emby-favourites design D10):
+    /// the Hero heart's press, which runs the same write the menu entry runs.
+    SetFavourite { item_id: String, favourite: bool },
     /// Show the item's detail in the Hero.
     ShowDetail { item_id: String },
     /// Open the album node: load its tracks when the cache does not hold
@@ -237,56 +240,48 @@ pub enum GuiHomeRowId {
 
 impl From<GuiLibraryCommand> for crate::gui_core::GuiLibraryCommand {
     fn from(command: GuiLibraryCommand) -> Self {
+        use GuiLibraryCommand as G;
         match command {
-            GuiLibraryCommand::OpenDestination { position } => Self::OpenDestination { position },
-            GuiLibraryCommand::CollectionToggle { target, key } => {
-                Self::CollectionToggle { target, key }
-            }
-            GuiLibraryCommand::CollectionAll { target } => Self::CollectionAll { target },
-            GuiLibraryCommand::ListSort { target, sort } => Self::ListSort { target, sort },
-            GuiLibraryCommand::LibrarySetView { lib_idx, view } => {
-                Self::LibrarySetView { lib_idx, view }
-            }
-            GuiLibraryCommand::ShowDetail { item_id } => Self::ShowDetail { item_id },
-            GuiLibraryCommand::OpenAlbum { album_id } => Self::OpenAlbum { album_id },
-            GuiLibraryCommand::Play { item_id } => Self::Play { item_id },
-            GuiLibraryCommand::AddToQueue { item_id } => Self::AddToQueue { item_id },
-            GuiLibraryCommand::ShuffleArtist { album_ids } => Self::ShuffleArtist { album_ids },
-            GuiLibraryCommand::ShowArtist {
+            G::OpenDestination { position } => Self::OpenDestination { position },
+            G::CollectionToggle { target, key } => Self::CollectionToggle { target, key },
+            G::CollectionAll { target } => Self::CollectionAll { target },
+            G::ListSort { target, sort } => Self::ListSort { target, sort },
+            G::LibrarySetView { lib_idx, view } => Self::LibrarySetView { lib_idx, view },
+            G::SetFavourite { item_id, favourite } => Self::SetFavourite { item_id, favourite },
+            G::ShowDetail { item_id } => Self::ShowDetail { item_id },
+            G::OpenAlbum { album_id } => Self::OpenAlbum { album_id },
+            G::Play { item_id } => Self::Play { item_id },
+            G::AddToQueue { item_id } => Self::AddToQueue { item_id },
+            G::ShuffleArtist { album_ids } => Self::ShuffleArtist { album_ids },
+            G::ShowArtist {
                 lib_idx,
                 artist_key,
             } => Self::ShowArtist {
                 lib_idx,
                 artist_key: artist_key.into(),
             },
-            GuiLibraryCommand::PlayArtist { album_ids } => Self::PlayArtist { album_ids },
-            GuiLibraryCommand::AddArtistToQueue { album_ids } => {
-                Self::AddArtistToQueue { album_ids }
-            }
-            GuiLibraryCommand::PlayArtistTrack {
+            G::PlayArtist { album_ids } => Self::PlayArtist { album_ids },
+            G::AddArtistToQueue { album_ids } => Self::AddArtistToQueue { album_ids },
+            G::PlayArtistTrack {
                 album_ids,
                 track_id,
             } => Self::PlayArtistTrack {
                 album_ids,
                 track_id,
             },
-            GuiLibraryCommand::MenuEntry { row, index } => Self::MenuEntry { row, index },
-            GuiLibraryCommand::RowMenu { row } => Self::RowMenu { row },
-            GuiLibraryCommand::Shuffle { row } => Self::Shuffle { row },
-            GuiLibraryCommand::HomeSelect { row } => Self::HomeSelect { row: row.into() },
-            GuiLibraryCommand::HomePlay { row } => Self::HomePlay { row: row.into() },
-            GuiLibraryCommand::HomeQueue { row } => Self::HomeQueue { row: row.into() },
-            GuiLibraryCommand::ShowsSelect { lib_idx, row } => Self::ShowsSelect { lib_idx, row },
-            GuiLibraryCommand::ShowsSelectSeason { lib_idx, season_id } => {
+            G::MenuEntry { row, index } => Self::MenuEntry { row, index },
+            G::RowMenu { row } => Self::RowMenu { row },
+            G::Shuffle { row } => Self::Shuffle { row },
+            G::HomeSelect { row } => Self::HomeSelect { row: row.into() },
+            G::HomePlay { row } => Self::HomePlay { row: row.into() },
+            G::HomeQueue { row } => Self::HomeQueue { row: row.into() },
+            G::ShowsSelect { lib_idx, row } => Self::ShowsSelect { lib_idx, row },
+            G::ShowsSelectSeason { lib_idx, season_id } => {
                 Self::ShowsSelectSeason { lib_idx, season_id }
             }
-            GuiLibraryCommand::ShowsPlay { lib_idx, item_id } => {
-                Self::ShowsPlay { lib_idx, item_id }
-            }
-            GuiLibraryCommand::ShowsQueue { lib_idx, item_id } => {
-                Self::ShowsQueue { lib_idx, item_id }
-            }
-            GuiLibraryCommand::ShowsOpenInView {
+            G::ShowsPlay { lib_idx, item_id } => Self::ShowsPlay { lib_idx, item_id },
+            G::ShowsQueue { lib_idx, item_id } => Self::ShowsQueue { lib_idx, item_id },
+            G::ShowsOpenInView {
                 lib_idx,
                 series,
                 seasons,
@@ -295,15 +290,13 @@ impl From<GuiLibraryCommand> for crate::gui_core::GuiLibraryCommand {
                 series,
                 seasons,
             },
-            GuiLibraryCommand::Refresh { album_ids } => Self::Refresh { album_ids },
-            GuiLibraryCommand::EmbySelect { lib_idx, row } => Self::EmbySelect { lib_idx, row },
-            GuiLibraryCommand::EmbyPlay { lib_idx, item_id } => Self::EmbyPlay { lib_idx, item_id },
-            GuiLibraryCommand::EmbyQueue { lib_idx, item_id } => {
-                Self::EmbyQueue { lib_idx, item_id }
-            }
-            GuiLibraryCommand::AbsSelect { lib_idx, row } => Self::AbsSelect { lib_idx, row },
-            GuiLibraryCommand::AbsPlay { lib_idx, item_id } => Self::AbsPlay { lib_idx, item_id },
-            GuiLibraryCommand::AbsPlayChapter {
+            G::Refresh { album_ids } => Self::Refresh { album_ids },
+            G::EmbySelect { lib_idx, row } => Self::EmbySelect { lib_idx, row },
+            G::EmbyPlay { lib_idx, item_id } => Self::EmbyPlay { lib_idx, item_id },
+            G::EmbyQueue { lib_idx, item_id } => Self::EmbyQueue { lib_idx, item_id },
+            G::AbsSelect { lib_idx, row } => Self::AbsSelect { lib_idx, row },
+            G::AbsPlay { lib_idx, item_id } => Self::AbsPlay { lib_idx, item_id },
+            G::AbsPlayChapter {
                 lib_idx,
                 book_id,
                 chapter,
@@ -312,29 +305,21 @@ impl From<GuiLibraryCommand> for crate::gui_core::GuiLibraryCommand {
                 book_id,
                 chapter,
             },
-            GuiLibraryCommand::AbsQueue { lib_idx, item_id } => Self::AbsQueue { lib_idx, item_id },
-            GuiLibraryCommand::PodcastsSelect { lib_idx, row } => {
-                Self::PodcastsSelect { lib_idx, row }
-            }
-            GuiLibraryCommand::PodcastsPlay { lib_idx, item_id } => {
-                Self::PodcastsPlay { lib_idx, item_id }
-            }
-            GuiLibraryCommand::PodcastsQueue { lib_idx, item_id } => {
-                Self::PodcastsQueue { lib_idx, item_id }
-            }
-            GuiLibraryCommand::FeedsSelect { row } => Self::FeedsSelect { row },
-            GuiLibraryCommand::FeedsPlay { item_id } => Self::FeedsPlay { item_id },
-            GuiLibraryCommand::FeedsQueue { item_id } => Self::FeedsQueue { item_id },
-            GuiLibraryCommand::SearchQuery { query } => Self::SearchQuery { query },
-            GuiLibraryCommand::SearchActivate { id, item_type } => {
-                Self::SearchActivate { id, item_type }
-            }
-            GuiLibraryCommand::SearchClose => Self::SearchClose,
-            GuiLibraryCommand::RowsInView { scope, ids } => Self::RowsInView {
+            G::AbsQueue { lib_idx, item_id } => Self::AbsQueue { lib_idx, item_id },
+            G::PodcastsSelect { lib_idx, row } => Self::PodcastsSelect { lib_idx, row },
+            G::PodcastsPlay { lib_idx, item_id } => Self::PodcastsPlay { lib_idx, item_id },
+            G::PodcastsQueue { lib_idx, item_id } => Self::PodcastsQueue { lib_idx, item_id },
+            G::FeedsSelect { row } => Self::FeedsSelect { row },
+            G::FeedsPlay { item_id } => Self::FeedsPlay { item_id },
+            G::FeedsQueue { item_id } => Self::FeedsQueue { item_id },
+            G::SearchQuery { query } => Self::SearchQuery { query },
+            G::SearchActivate { id, item_type } => Self::SearchActivate { id, item_type },
+            G::SearchClose => Self::SearchClose,
+            G::RowsInView { scope, ids } => Self::RowsInView {
                 scope: scope.into(),
                 ids,
             },
-            GuiLibraryCommand::OpenUrl { url } => Self::OpenUrl { url },
+            G::OpenUrl { url } => Self::OpenUrl { url },
         }
     }
 }

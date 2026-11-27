@@ -87,7 +87,6 @@ fn hero() -> GuiMusicHeroFrame {
 /// The Music list part: one checked collection.
 fn music_list() -> GuiDestinationList {
     GuiDestinationList::Music(GuiMusicList {
-        view: crate::gui_core::GuiLibraryView::All,
         lib_idx: 0,
         collections: GuiCollections {
             target: crate::gui_core::GuiCollectionTarget::Music(0),
@@ -102,7 +101,6 @@ fn music_list() -> GuiDestinationList {
         loading: false,
         failure: None,
         artists: Vec::new(),
-        favourites: None,
     })
 }
 

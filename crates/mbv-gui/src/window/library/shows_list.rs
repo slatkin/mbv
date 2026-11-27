@@ -351,7 +351,9 @@ pub fn build_shows_rows(
         // The Favourites list is the favourites data path's own list
         // component (emby-favourites design D6, unit 5.1): until it lands,
         // the view paints no row.
-        GuiLibraryView::Favourites => Vec::new(),
+        GuiLibraryView::Favourites
+        | GuiLibraryView::FavouriteShows
+        | GuiLibraryView::FavouriteEpisodes => Vec::new(),
         GuiLibraryView::New | GuiLibraryView::Upcoming => {
             // The filter's empty text keeps every row (`filter_match`'s own
             // rule), so no separate emptiness test rides here.

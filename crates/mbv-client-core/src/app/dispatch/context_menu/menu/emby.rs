@@ -242,6 +242,16 @@ impl App {
         {
             return;
         }
+        // A Grouped Music library is excluded from favourites everywhere
+        // (emby-favourites design D11): no row resolved inside one — artist,
+        // album, or track — offers the entry, while the same music item in a
+        // non-grouped music library, a mixed plain library, or Home keeps it.
+        if self
+            .context_menu_lib_idx()
+            .is_some_and(|lib_idx| self.is_grouped_music_library(lib_idx))
+        {
+            return;
+        }
         if item.is_favorite {
             Self::push_context_action(
                 entries,

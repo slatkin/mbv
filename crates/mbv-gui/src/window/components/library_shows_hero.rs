@@ -34,6 +34,7 @@ use crate::window::components::library_dropdown::{
 };
 use crate::window::components::library_hero_actions::LibraryHeroActions;
 use crate::window::components::library_hero_frame::{HeroBlock, HeroHeader, LibraryHeroFrame};
+use crate::window::components::library_hero_heart::LibraryHeroHeart;
 use crate::window::components::library_workspace_table::{
     LibraryWorkspaceTable, WorkspaceLoading, WorkspaceRow,
 };
@@ -385,6 +386,14 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
     // the bundled placeholder.
     let backdrop = hero_backdrop(hero.art.as_ref(), BackdropStyle::Video);
 
+    // The heart (emby-favourites design D10): the header band's one action,
+    // present exactly while the item supports favourites.
+    let heart = hero.heart.clone().map(|heart| {
+        rsx! {
+            LibraryHeroHeart { heart, hook: "data-library-shows-hero-heart" }
+        }
+    });
+
     rsx! {
         LibraryHeroFrame {
             attr: "shows",
@@ -399,6 +408,7 @@ pub fn LibraryShowsHero(props: LibraryShowsHeroProps) -> Element {
             backdrop,
             list_title: children.is_some().then(|| "Episodes".to_owned()),
             children,
+            header_action: heart,
         }
     }
 }

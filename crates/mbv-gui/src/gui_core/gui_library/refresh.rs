@@ -85,7 +85,9 @@ fn shows_refreshing(app: &App, gui: &GuiClientState, lib_idx: usize) -> bool {
         GuiLibraryView::Upcoming => app
             .emby_library_id(lib_idx)
             .is_some_and(|library_id| app.tv_upcoming_fetch_in_flight(library_id)),
-        GuiLibraryView::Favourites => favourites_refreshing(app, gui, lib_idx),
+        GuiLibraryView::Favourites
+        | GuiLibraryView::FavouriteShows
+        | GuiLibraryView::FavouriteEpisodes => favourites_refreshing(app, gui, lib_idx),
     }
 }
 
@@ -193,7 +195,9 @@ fn refresh_shows(app: &mut App, gui: &mut GuiClientState, lib_idx: usize) {
             }
         }
         GuiLibraryView::Upcoming => app.refetch_tv_upcoming_snapshot(lib_idx),
-        GuiLibraryView::Favourites => favourites::refetch_favourites(app, gui, lib_idx),
+        GuiLibraryView::Favourites
+        | GuiLibraryView::FavouriteShows
+        | GuiLibraryView::FavouriteEpisodes => favourites::refetch_favourites(app, gui, lib_idx),
     }
 }
 

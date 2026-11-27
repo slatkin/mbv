@@ -30,7 +30,9 @@ impl App {
     /// Activated when `music.levels` starts with `"group"` and the nav stack
     /// has a group level plus an album level above it.
     pub fn is_grouped_music_library(&self, lib_idx: usize) -> bool {
-        self.libs[lib_idx].library.collection_type == "music"
+        self.libs
+            .get(lib_idx)
+            .is_some_and(|lib| lib.library.collection_type == "music")
             && self
                 .music_levels
                 .first()

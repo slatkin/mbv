@@ -26,6 +26,7 @@ use crate::bridge::library::GuiLibraryCommand;
 use crate::gui_core::GuiDestinationKind;
 use crate::window::library::list::{
     GeometryRow, LIBRARY_ROW_HEIGHT, clamp_scroll_top, filter_match, measure_scroll_top,
+    scroll_step,
 };
 use crate::window::library::scroll::ListScroll;
 
@@ -62,12 +63,11 @@ impl GeometryRow for FavouritesRow {
 }
 
 /// The destination whose list part carries a Favourites list (design D6): the
-/// Music destination, the Shows destination, or a plain Emby library. The site
-/// names the library the view dropdown and the list's own stores are keyed by.
+/// Shows destination or a plain Emby library — a Grouped Music destination is
+/// excluded from favourites everywhere (design D11). The site names the
+/// library the view dropdown and the list's own stores are keyed by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FavouritesSite {
-    /// The Music destination's Favourites view.
-    Music(usize),
     /// The Shows destination's Favourites view.
     Shows(usize),
     /// A plain Emby library's Favourites view.
@@ -79,7 +79,7 @@ impl FavouritesSite {
     #[must_use]
     pub fn lib_idx(self) -> usize {
         match self {
-            Self::Music(lib_idx) | Self::Shows(lib_idx) | Self::Emby(lib_idx) => lib_idx,
+            Self::Shows(lib_idx) | Self::Emby(lib_idx) => lib_idx,
         }
     }
 
@@ -88,7 +88,6 @@ impl FavouritesSite {
     #[must_use]
     pub fn destination(self) -> GuiDestinationKind {
         match self {
-            Self::Music(lib_idx) => GuiDestinationKind::Music { lib_idx },
             Self::Shows(lib_idx) => GuiDestinationKind::Shows { lib_idx },
             Self::Emby(lib_idx) => GuiDestinationKind::Library { lib_idx },
         }
@@ -114,10 +113,6 @@ pub fn favourites_part(
     list: Option<&GuiLibraryList>,
 ) -> Option<(FavouritesSite, &GuiFavouritesList)> {
     match list.map(|list| &list.destination) {
-        Some(GuiDestinationList::Music(destination)) => destination
-            .favourites
-            .as_ref()
-            .map(|part| (FavouritesSite::Music(destination.lib_idx), part)),
         Some(GuiDestinationList::Shows(destination)) => destination
             .favourites
             .as_ref()
@@ -127,7 +122,8 @@ pub fn favourites_part(
             .as_ref()
             .map(|part| (FavouritesSite::Emby(destination.lib_idx), part)),
         Some(
-            GuiDestinationList::Home(_)
+            GuiDestinationList::Music(_)
+            | GuiDestinationList::Home(_)
             | GuiDestinationList::Audiobooks(_)
             | GuiDestinationList::Podcasts(_)
             | GuiDestinationList::Feeds(_),
@@ -247,6 +243,26 @@ impl LibraryState {
                     viewport_height: held.scroll.viewport_height,
                 },
                 filter,
+            },
+        );
+    }
+
+    /// Step the Favourites list's scroll one movement key along (design D6):
+    /// the keyboard's arrows, `PageUp` and `PageDown`, `Home`, and `End` over the list,
+    /// through the same geometry the destination scrolls step. The list's own
+    /// store moves, so the destination's All scroll never does.
+    pub fn step_favourites_scroll(&self, lib_idx: usize, mv: super::list::ListMove) {
+        let held = self.favourites_view(lib_idx);
+        let rows = self.favourites_rows_under(lib_idx, &held.filter);
+        let top = scroll_step(&rows, held.scroll, mv);
+        self.set_favourites_view(
+            lib_idx,
+            FavouritesView {
+                scroll: ListScroll {
+                    scroll_top: top,
+                    viewport_height: held.scroll.viewport_height,
+                },
+                filter: held.filter,
             },
         );
     }

@@ -17,7 +17,6 @@ use crate::bridge::frame::library::{
 /// The carried Music list part with no album picked.
 pub(super) fn music_list() -> GuiMusicList {
     GuiMusicList {
-        view: crate::gui_core::GuiLibraryView::All,
         lib_idx: 0,
         collections: GuiCollections {
             target: crate::gui_core::GuiCollectionTarget::Music(0),
@@ -28,7 +27,6 @@ pub(super) fn music_list() -> GuiMusicList {
         loading: false,
         failure: None,
         artists: Vec::new(),
-        favourites: None,
     }
 }
 
@@ -128,6 +126,7 @@ pub(super) fn home_sections(with_hero: bool) -> (GuiLibraryList, GuiLibraryDetai
         GuiLibraryDetail::Home(GuiHomeDetail {
             selected: Some(row_id),
             hero: with_hero.then(|| GuiHomeHeroFrame {
+                heart: None,
                 title: "Better Call Saul".to_owned(),
                 parent: None,
                 facts: crate::bridge::frame::library::GuiHeroFactsFrame {
@@ -174,6 +173,7 @@ pub(super) fn shows_detail() -> GuiShowsDetail {
         workspace_loading: false,
         selected: Some("s1".to_owned()),
         hero: Some(GuiShowsHeroFrame {
+            heart: None,
             title: "Atlanta".to_owned(),
             parent: None,
             facts: crate::bridge::frame::library::GuiHeroFactsFrame {
@@ -251,6 +251,7 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
         GuiLibraryDetail::Emby(GuiEmbyDetail {
             selected: Some("m1".to_owned()),
             hero: Some(GuiEmbyHeroFrame {
+                heart: None,
                 title: "Alien".to_owned(),
                 facts: crate::bridge::frame::library::GuiHeroFactsFrame {
                     pills: Vec::new(),
@@ -271,6 +272,7 @@ pub(super) fn emby_sections(feed_group: bool, label: &str) -> (GuiLibraryList, G
 /// sends them while that view paints.
 pub(super) fn emby_favourites_sections() -> (GuiLibraryList, GuiLibraryDetail) {
     let hero = GuiEmbyHeroFrame {
+        heart: None,
         title: "Heat".to_owned(),
         facts: crate::bridge::frame::library::GuiHeroFactsFrame {
             pills: Vec::new(),

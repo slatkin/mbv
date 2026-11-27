@@ -113,7 +113,7 @@ impl App {
 
     /// Set `is_favorite` on every App-held `EmbyItem` with `item_id`
     /// (emby-favourites design D4): the TUI browse levels, the Home Continue
-    /// Watching content, the cached series details the Shows tree reads
+    /// Watching content and the Home Recently added store, the cached series details the Shows tree reads
     /// (`series_detail_item`), the album track cache, and the artist detail
     /// cache. Queue items stay untouched (design D2).
     fn flip_favourite_held_copies(&mut self, item_id: &str, favourite: bool) {
@@ -131,6 +131,17 @@ impl App {
         }
         for item in &mut self.home_content.continue_items {
             flip(item);
+        }
+        // The Recently added store's rows back the Home row menu's stable
+        // target (design D4): an unflipped row would offer the stale entry —
+        // "Add to Favourites" on an item just favourited — until the next
+        // refetch.
+        for items in self.home_recently_added.values_mut() {
+            for item in items {
+                if let mbv_queue::QueueItem::Emby(emby) = item {
+                    flip(emby);
+                }
+            }
         }
         for detail in self.series_detail_cache.values_mut() {
             for item in &mut detail.seasons {

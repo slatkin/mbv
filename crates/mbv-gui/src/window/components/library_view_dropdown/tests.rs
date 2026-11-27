@@ -174,7 +174,7 @@ fn the_popover_paints_the_destination_radio_views_and_no_filter() {
             .query_selector_all("[data-library-view-row]")
             .unwrap()
             .len(),
-        4
+        5
     );
     assert!(fixture.presents("[data-library-view-mark]"));
     assert!(!fixture.presents("input"));

@@ -86,6 +86,16 @@ pub(in crate::gui_core::gui_library) fn favourites_projection(
         Some(GuiSectionRequest::Requesting) | None => (&[][..], true),
     };
     let mut items: Vec<&EmbyItem> = items.iter().collect();
+    // The Shows destination's two favourite views project only their own
+    // type (design D9): Favourite Shows the Series rows, Favourite Episodes
+    // the Episode rows. Every other view and destination projects the whole
+    // list. A favourite in a TV library that is neither shows in neither
+    // view, as Emby's own TV Favorites tab has no section for it.
+    match super::library_view::library_view(gui, lib_idx) {
+        GuiLibraryView::FavouriteShows => items.retain(|item| item.item_type == "Series"),
+        GuiLibraryView::FavouriteEpisodes => items.retain(|item| item.item_type == "Episode"),
+        _ => {}
+    }
     // Collections first, then the media items, each group in the existing
     // Title order (design D6, D9): a TV library therefore lists its Series
     // before its Episodes.
@@ -138,7 +148,12 @@ pub(crate) fn refetch_favourites(app: &mut App, gui: &mut GuiClientState, lib_id
     let Some(library_id) = app.emby_library_id(lib_idx).map(str::to_string) else {
         return;
     };
-    let music = app.is_grouped_music_library(lib_idx);
+    // The `/Artists` merge (design D6) is a music library's, grouped or not:
+    // a Grouped Music library never reaches this call at all (design D11),
+    // so the flag names the library's type, not its presentation.
+    let music = app
+        .emby_library(lib_idx)
+        .is_some_and(|lib| lib.library.collection_type == "music");
     let refreshing = gui.favourites_refreshing.contains(&library_id);
     match favourites_fetch(gui.favourites.get(&library_id), refreshing) {
         FavouritesFetch::Hold => return,

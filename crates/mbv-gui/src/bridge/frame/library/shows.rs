@@ -6,8 +6,9 @@
 //! position.
 
 use crate::gui_core::{
-    GuiLibraryView, GuiListSortFrame, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsProjection,
-    GuiShowsRow, GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries, GuiShowsWorkspace,
+    GuiHeroHeart, GuiLibraryView, GuiListSortFrame, GuiShowsEpisodeRow, GuiShowsHero,
+    GuiShowsProjection, GuiShowsRow, GuiShowsSeasonNode, GuiShowsSeasonPill, GuiShowsSeries,
+    GuiShowsWorkspace,
 };
 
 use super::favourites::GuiFavouritesList;
@@ -156,6 +157,9 @@ pub struct GuiShowsHeroFrame {
     /// The series Hero's Workspace; `None` on the Latest mode's episode Hero
     /// and while the selected series' detail has not landed.
     pub workspace: Option<GuiShowsWorkspaceFrame>,
+    /// The heart control's facts (emby-favourites design D10), present
+    /// exactly when the item supports favourites.
+    pub heart: Option<GuiHeroHeart>,
 }
 
 /// A series Hero's Workspace (design D12): the season pills and the selected
@@ -292,6 +296,7 @@ impl From<&GuiShowsHero> for GuiShowsHeroFrame {
             art_shape: GuiArtShapeFrame::from(hero.art_shape),
             art: hero.art.as_ref().map(GuiArtRef::from),
             workspace: hero.workspace.as_ref().map(GuiShowsWorkspaceFrame::from),
+            heart: hero.heart.clone(),
         }
     }
 }

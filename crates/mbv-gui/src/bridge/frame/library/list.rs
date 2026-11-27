@@ -76,7 +76,7 @@ impl GuiDestinationList {
     #[must_use]
     pub fn rows(&self) -> usize {
         match self {
-            Self::Music(list) => painted_rows(list.favourites.as_ref(), list.artists.len()),
+            Self::Music(list) => list.artists.len(),
             Self::Home(list) => list.rows.len(),
             Self::Shows(list) => painted_rows(list.favourites.as_ref(), list.rows.len()),
             Self::Emby(list) => painted_rows(list.favourites.as_ref(), list.rows.len()),

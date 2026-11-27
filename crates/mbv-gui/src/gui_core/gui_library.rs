@@ -59,7 +59,9 @@ use self::emby::GuiEmbyFeedCollectionSite;
 pub use self::emby::GuiEmbyLibrarySelection;
 pub(crate) use self::emby::GuiEmbyRootItems;
 pub(crate) use self::emby::emby_feed_wants_target_in_set;
-pub use self::emby_projection::{GuiEmbyHero, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind};
+pub use self::emby_projection::{
+    GuiEmbyHero, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind, GuiHeroHeart,
+};
 pub use self::entry_list::{GuiEntryListProjection, GuiEntryRow};
 pub use self::favourites::GuiFavouritesProjection;
 pub(crate) use self::favourites::apply_favourite_change;
@@ -205,6 +207,9 @@ pub enum GuiLibraryCommand {
         lib_idx: usize,
         view: GuiLibraryView,
     },
+    /// Set or clear the item's favourite state (emby-favourites design D10):
+    /// the Hero heart's press, which runs the same write the menu entry runs.
+    SetFavourite { item_id: String, favourite: bool },
     /// Show the item's detail in the Hero (design D2).
     ShowDetail { item_id: String },
     /// Open an album node: load its tracks when the cache does not hold them
@@ -401,6 +406,23 @@ impl GuiCore {
         self.dispatch_gui_library_command(command);
     }
 
+    /// The heart's write (emby-favourites design D10): the menu entry's own
+    /// shared context action, so the landing flips every held copy through
+    /// the same path.
+    fn set_gui_favourite(&mut self, item_id: String, favourite: bool) {
+        let action = if favourite {
+            Some(mbv_ui_model::context_menu::ContextAction::Favourite(
+                item_id,
+            ))
+        } else {
+            Some(mbv_ui_model::context_menu::ContextAction::Unfavourite(
+                item_id,
+            ))
+        };
+        self.app
+            .execute_context_action_with_stores(action, None, Some(&mut self.gui));
+    }
+
     /// The Library command's arms (design D2): the one dispatch the core's own
     /// call runs, so every variant has its own handling site here.
     fn dispatch_gui_library_command(&mut self, command: GuiLibraryCommand) {
@@ -419,6 +441,9 @@ impl GuiCore {
             }
             GuiLibraryCommand::LibrarySetView { lib_idx, view } => {
                 self.set_gui_library_view(lib_idx, view);
+            }
+            GuiLibraryCommand::SetFavourite { item_id, favourite } => {
+                self.set_gui_favourite(item_id, favourite);
             }
             GuiLibraryCommand::ShowDetail { item_id } => {
                 self.show_gui_library_detail(&item_id);
