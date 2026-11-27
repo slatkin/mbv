@@ -405,15 +405,17 @@ When the tracked item on an Emby Session ends within 10 seconds of its runtime a
 
 When a user selection of a playback output would hand off an active slot — a slot is active on
 the current output and the selected target is not that output — the Client SHALL ask first, with
-a prompt that names the target and offers Yes and No. Both Clients SHALL apply the same prompt
-through their shared App dispatch. Launch auto-reconnect and the owner's own advance SHALL NOT
-ask: they are not user selections.
+a prompt that names the target and offers two answers that both act: continue the slot on the
+target, or switch to the target and hand nothing off. The prompt SHALL offer no answer that
+cancels the selection. Both Clients SHALL apply the same prompt through their shared App
+dispatch. Launch auto-reconnect and the owner's own advance SHALL NOT ask: they are not user
+selections.
 
 #### Scenario: A selection that would hand off asks
 
 - **WHEN** the user selects a playback target while a slot is active on the current output and
   the target is not that output
-- **THEN** the Client asks "Continue playback on the target?" with Yes and No
+- **THEN** the Client asks whether to continue playback on the target or to switch to it only
 - **AND** no output selection reaches the Owner until the user answers
 
 #### Scenario: Selecting local playback asks while a remote output plays
@@ -421,28 +423,127 @@ ask: they are not user selections.
 - **WHEN** the user selects local playback while a Cast receiver or an Emby Session holds an
   active slot
 - **THEN** the Client asks before it selects local playback
-- **AND** No leaves the remote output playing; Yes stops it and local playback continues the
-  slot from its position
+- **AND** the continue answer stops the remote output and local playback continues the slot from
+  its position
+- **AND** the switch answer stops the remote output and makes local playback the output with
+  nothing playing
 
-### Requirement: Yes runs the hand-off and No cancels
+### Requirement: The switch answer hands nothing off
 
-The Yes answer SHALL send the selection unchanged, so the Owner performs the hand-off this
-capability defines. The No answer SHALL send nothing, and the current output SHALL keep playing.
-A selection that hands nothing off SHALL keep its current path without a prompt.
+The continue answer SHALL send the selection unchanged, so the Owner performs the hand-off this capability defines. The switch answer SHALL send the output switch for the same target. When the local Owner does not advertise the output switch, the prompt SHALL offer Yes and No instead, and No SHALL send nothing. A selection that hands nothing off SHALL keep its current path without a prompt.
 
-#### Scenario: Yes runs the hand-off unchanged
+#### Scenario: Continue runs the hand-off unchanged
 
-- **WHEN** the user answers Yes
+- **WHEN** the user answers with the continue answer
 - **THEN** the Owner stops the old output and continues the active slot on the new output at its
   position, exactly as an unasked selection would
 
-#### Scenario: No cancels
+#### Scenario: Switch hands nothing off
 
-- **WHEN** the user answers No
-- **THEN** the Client sends nothing and the current output keeps playing
+- **WHEN** the user answers with the switch answer
+- **THEN** the Client sends the output switch for the target
+- **AND** the Owner stops the old output, makes the target the output, and starts no slot on it
+
+#### Scenario: An Owner without the output switch keeps a cancel
+
+- **WHEN** the local Owner does not advertise the output switch and the user is asked
+- **THEN** the prompt offers Yes and No
+- **AND** No sends nothing and the current output keeps playing
 
 #### Scenario: Nothing active, or the no-op selection, skips the prompt
 
 - **WHEN** nothing is active on the current output, or the selected target already is the output
   (the Owner's no-op hand-off)
 - **THEN** the selection runs its current path without a prompt
+
+### Requirement: An output switch hands nothing off
+
+When the Owner receives an output switch for a target, it SHALL select that output as an output
+selection does, but it SHALL capture no hand-off: the old output stops, the target becomes the
+active output, and no slot starts on it. The Owner SHALL keep the queue and its order unchanged.
+A switch to the output that is already active SHALL be rejected as a selection of it is.
+
+#### Scenario: Local playback switches to a receiver
+
+- **WHEN** local playback plays a slot and the Owner receives an output switch to a Cast receiver
+  and the receiver connects
+- **THEN** local playback stops
+- **AND** the receiver is the output and plays nothing
+- **AND** the queue is unchanged
+
+#### Scenario: A remote output switches to local playback
+
+- **WHEN** a Cast receiver or an Emby Session plays a slot and the Owner receives an output
+  switch to local playback
+- **THEN** the remote output stops
+- **AND** local playback is the output and plays nothing
+
+#### Scenario: A paused slot is not carried over
+
+- **WHEN** the active slot is paused and the Owner receives an output switch to a different output
+- **THEN** the new output holds no slot and nothing is paused or playing on it
+
+#### Scenario: The target cannot be reached
+
+- **WHEN** the Owner receives an output switch and the target does not connect or is not listed
+- **THEN** the Owner rejects the switch with a reason
+- **AND** the old output keeps playing
+
+#### Scenario: Playing after a switch uses the new output
+
+- **WHEN** the user plays a slot after a switch made a remote receiver the output
+- **THEN** the owner loads that slot onto the receiver and local playback does not start
+
+### Requirement: A switch leaves the old remote output playing
+
+When the Owner performs an output switch away from a Cast receiver or an Emby Session, it SHALL
+release that device without stopping it: the Owner SHALL send the device no stop and SHALL NOT
+tear down a receiver application. The device SHALL keep playing what it plays, and the Owner SHALL
+no longer drive or track it. The Owner SHALL still make the target the output, keep the queue
+unchanged, and start no slot on the target. A switch away from local playback SHALL stop the
+local run, because the Owner hosts it. This requirement supersedes every statement that an output
+switch stops a remote old output. A hand-off (the continue answer) SHALL keep stopping the old
+output, because the slot moves to the target.
+
+#### Scenario: A receiver is released by a switch
+
+- **WHEN** a Cast receiver plays a slot and the Owner receives an output switch to another target
+  and the target connects
+- **THEN** the receiver keeps playing and receives no stop
+- **AND** the target is the output and plays nothing
+- **AND** the queue is unchanged
+
+#### Scenario: An Emby Session is released by a switch
+
+- **WHEN** an Emby Session plays the loaded item and the Owner receives an output switch to
+  another target and the target connects
+- **THEN** the Session device keeps playing and receives no stop
+- **AND** the Owner no longer reacts to that device's playback
+
+#### Scenario: A released device does not move the queue
+
+- **WHEN** a released device ends, pauses, or stops its media after the switch
+- **THEN** the Owner records nothing for it and does not advance the queue
+
+#### Scenario: Local playback is stopped by a switch
+
+- **WHEN** local playback plays a slot and the Owner receives an output switch to a remote target
+- **THEN** the local run stops
+- **AND** the target is the output and plays nothing
+
+#### Scenario: A remote output switches to local playback
+
+- **WHEN** a Cast receiver or an Emby Session plays a slot and the Owner receives an output
+  switch to local playback
+- **THEN** the remote device keeps playing and receives no stop
+- **AND** local playback is the output and plays nothing
+
+#### Scenario: A hand-off still stops the old output
+
+- **WHEN** the Owner performs a selection that hands off the active slot
+- **THEN** the old output stops and the target continues the slot
+
+#### Scenario: A failed switch changes nothing
+
+- **WHEN** the target does not connect
+- **THEN** the Owner rejects the switch and the old output stays the output and keeps playing
