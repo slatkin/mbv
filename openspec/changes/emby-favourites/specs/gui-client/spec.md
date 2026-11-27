@@ -55,6 +55,36 @@ Music, Podcasts, Feeds, and an Emby library in feed-group mode SHALL each show o
 - **WHEN** the user presses Space
 - **THEN** playback plays or pauses and the selection does not change
 
+### Requirement: The collection dropdown sits in the list header and no pill row remains
+
+The GUI Library panel SHALL show no pill row and no selector row between the top bar and the list in any destination. The collection dropdown trigger SHALL sit in the list header on the title's line and SHALL show that it opens a menu. Where the destination paints a view dropdown, the collection dropdown trigger SHALL sit directly to the left of the view dropdown trigger; otherwise it SHALL sit directly to the left of the sort control where one paints, and at the right end of the line where none does. The open dropdown SHALL open under its trigger, over the list.
+
+#### Scenario: Podcasts header
+
+- **WHEN** the Podcasts destination paints
+- **THEN** the list header's title line shows the Service mark at the left, the refresh button, the dropdown trigger, and the sort control at the right end, and nothing else
+- **AND** no row of pills or selector controls shows between the top bar and the list
+
+#### Scenario: A Music header paints both triggers
+
+- **WHEN** the Music destination paints its All view
+- **THEN** the collection dropdown trigger sits directly to the left of the view dropdown trigger
+
+#### Scenario: A feed-group header paints both triggers
+
+- **WHEN** an Emby library in feed-group mode paints its All view
+- **THEN** the collection dropdown trigger sits directly to the left of the view dropdown trigger, and the sort control is the line's rightmost item
+
+#### Scenario: No destination paints a pill row
+
+- **WHEN** any destination paints, Home, Shows, and Audiobooks included
+- **THEN** no pill row shows above the list
+
+#### Scenario: The dropdown opens under the trigger
+
+- **WHEN** the user presses the trigger
+- **THEN** the dropdown opens directly under the trigger, over the list rows
+
 ### Requirement: Each flat Library list has a sort control
 
 A plain Emby library, Audiobooks, Podcasts, Feeds, an Emby library in feed-group mode, and the Shows New view SHALL each show one single-choice sort control in the list header. Audiobooks SHALL offer Title, Author, Newest, and Oldest. Every other flat list SHALL offer Title, Newest, and Oldest. Home, Music, the Shows All and Upcoming views, Search, and the Playlists screen SHALL show no sort control. A Favourites view SHALL show no sort control.
@@ -200,6 +230,39 @@ The GUI Library list header of a Service destination SHALL show the destination'
 
 - **WHEN** the user opens Home
 - **THEN** the list header shows the "Home" title and no Service mark
+
+### Requirement: The Library Status bar shows hints and the location
+
+While the Library panel shows, a Library Status bar SHALL show under the Library column: the Search field on the left, and the location on the right: the destination, All or the names of the checked collections, and the picked item. While a library's view is Favourites, the location SHALL name Favourites in place of the collection names. The Music location names the picked album's title, or, while the Hero shows the artist page, the artist's name. The bar SHALL show no key hints. While prefix mode is armed, the armed state SHALL paint after the Search field, and the field and the location SHALL stay. The bar SHALL show no toast.
+
+#### Scenario: Music has an album picked
+
+- **GIVEN** Music is active with Hip-Hop checked and the album Licensed To Ill picked
+- **WHEN** the Library Status bar paints
+- **THEN** it shows the Search field and the location Music, Hip-Hop, Licensed To Ill, and no key hints
+
+#### Scenario: Music shows the artist page
+
+- **GIVEN** Music is active with Hip-Hop checked and the Hero shows the Beastie Boys artist page
+- **WHEN** the Library Status bar paints
+- **THEN** it shows the Search field and the location Music, Hip-Hop, Beastie Boys, and no key hints
+
+#### Scenario: A Favourites view names Favourites
+
+- **GIVEN** Music is active with Hip-Hop checked and its Favourites view painting
+- **WHEN** the Library Status bar paints
+- **THEN** it shows the Search field and the location Music, Favourites, and the picked favourite, and no collection name
+
+#### Scenario: Two collections are checked
+
+- **GIVEN** Feeds is active with Tifo Football and Off Menu checked
+- **WHEN** the Library Status bar paints
+- **THEN** the location names Feeds, then both subscriptions, then the picked entry
+
+#### Scenario: A toast arrives
+
+- **WHEN** a toast is presented while the Library panel shows
+- **THEN** the Library Status bar does not show it and does not change
 
 ## ADDED Requirements
 

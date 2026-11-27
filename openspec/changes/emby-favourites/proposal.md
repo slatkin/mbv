@@ -27,8 +27,9 @@ change follows that behaviour instead of inventing a model.
 - No cross-library favourites section exists. Home paints none.
 
 Out of scope: a favourite mark on rows, bulk (multi-selection) favouriting, favourite entries on
-Queue rows, favouriting Persons, Live TV channels, and Audiobookshelf or Feed items, and following
-a favourite change made by another client before the next refetch.
+Queue rows, a favourites entry on the grouped Music tree's artist rows, favouriting Persons,
+Live TV channels, and Audiobookshelf or Feed items, and following a favourite change made by
+another client before the next refetch.
 
 ## Capabilities
 

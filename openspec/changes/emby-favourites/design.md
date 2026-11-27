@@ -108,7 +108,8 @@ The title line order is: Service mark, refresh, Expand all / Collapse all (Music
 only), the collection dropdown (Music and feed-group, All view only), the view dropdown, then the
 sort control (where the view paints one). The Favourites view paints no sort control, no letter
 headings or rail, no tree buttons, and no collection dropdown. The refresh button in the
-Favourites view refetches the favourites list.
+Favourites view refetches the favourites list, and the Library Status bar's location names
+Favourites in place of the collection names.
 
 **D6. One Favourites list, fetched per library, painted by one component.** The GUI core holds a
 favourites store keyed by library id, holding the same request state type the New store uses

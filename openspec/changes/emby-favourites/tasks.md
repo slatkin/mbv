@@ -1,27 +1,25 @@
 # Tasks
 
 Run every make target in the foreground and wait for it. Never background a command and poll.
+Tests are the implementer's choice under `docs/invariants/14-test-ownership.md`; no row demands one.
 
 ## 1. Emby model and client
 
 - [ ] 1.1 Add `is_favorite: bool` (`#[serde(default)]`) and `EmbyItem::supports_favourite()` to
   `crates/mbv-emby-model/src/lib.rs`. The rule is design D1: false for Season, Folder,
   CollectionFolder, UserView, Channel, Program, Timer, SeriesTimer, Studio, Tag. Update every
-  `EmbyItem` constructor the compiler names. Verify: `make checks PKG=mbv-emby-model`; a `rstest`
-  `#[case]` table in that crate's `tests/` binary pins one row per excluded type and one allowed
-  type per family (Movie, Series, Episode, BoxSet, Audio, MusicAlbum, MusicArtist, Playlist).
-- [ ] 1.2 Read `UserData.IsFavorite` in `parse_item` (`crates/mbv-emby/src/types_parsing.rs`).
-  Verify: a parse test over recorded item JSON with `UserData.IsFavorite` true and absent; a serde
-  test that a queue-item JSON without the field loads as false.
+  `EmbyItem` constructor the compiler names. Verify: `make checks PKG=mbv-emby-model`.
+- [ ] 1.2 Read `UserData.IsFavorite` in `parse_item` (`crates/mbv-emby/src/types_parsing.rs`). The
+  field's `#[serde(default)]` makes a queue-item file written before this change load as not
+  favourite.
 - [ ] 1.3 Add `EmbyClient::set_favourite(item_id, favourite) -> Result<bool, EmbyError>` in
   `crates/mbv-emby/src/client_library.rs` next to `mark_played`: `POST
   /Users/{uid}/FavoriteItems/{id}` to set, `POST .../{id}/Delete` to clear, returning the reply's
-  `IsFavorite`. Verify: a mock-HTTP test asserts the method and path of each call and the returned
-  value (design D3).
+  `IsFavorite` (design D3).
 - [ ] 1.4 Add `EmbyClient::get_favourites(library_id, music: bool)`: the Items query of design D6
-  with `LATEST_FIELDS`, plus the `/Artists` listing when `music`, merged by id, with items that fail
-  `supports_favourite()` dropped. Verify: mock-HTTP tests for the TV shape (a Series, an Episode, a
-  Season dropped) and the Music shape (artist merged with a song, duplicate id kept once).
+  with `LATEST_FIELDS`, plus the `/Artists` listing when `music`, merged by id, with items that
+  fail `supports_favourite()` dropped. A favourited Season therefore never reaches the list, and a
+  Music library's artist rows merge with its items one row per id.
 
 ## 2. Menu entry and action
 
@@ -32,22 +30,16 @@ Run every make target in the foreground and wait for it. Never background a comm
   `push_favourite_context_action` called after the played-state entry in both
   `push_folder_context_actions` and `push_leaf_context_actions`, single row only, only when
   `item.supports_favourite()`, and never on the Queue-focus path (design D2). Labels "Add to
-  Favourites" / "Remove from Favourites". Verify: unit tests in
-  `crates/mbv-client-core/src/app/tests/context_actions.rs` for movie leaf, series collection,
-  music track (entry present, no played entry), season (absent), and Queue row (absent); update the
-  existing Movie, Continue Watching, and Album menu assertions to the new order.
+  Favourites" / "Remove from Favourites"; a music track's entry follows Add to Queue, because
+  music has no played-state entry.
 - [ ] 2.3 Execute the actions in `.../context_menu/actions.rs`: `context_set_favourite` calls
   `set_favourite`, then runs the design D4 flip over every App-held copy (new helper in
   client-core): the TUI levels, Home content, the series details (`series_detail_item`), the
   album track cache, and the artist detail cache; no client flashes "Emby is unavailable"; an
-  error flashes an error toast and changes nothing. Verify: tests that success flips
-  `is_favorite` in a held level item, that a favourite on a cached album track flips that track's
-  menu entry, and that an error leaves it unchanged and flashes.
+  error flashes an error toast and changes nothing.
 - [ ] 2.4 Confirm the GUI Library row-menu path carries the entry for plain-library, Shows, Music,
   and Home rows whose item supports favourites, adding no artist-row resolution: the grouped Music
   tree's artist rows offer no favourites entry, keyed by Service id or by name (design D8).
-  Verify: a `gui_core` test builds the menu for a music album row (entry present) and shows a
-  Service-keyed artist row's id resolves no favourites entry.
 - [ ] 2.5 Add `CONTEXT.md` term *Favourite* (the Emby per-user flag; *Avoid*: star, like, bookmark)
   and update `docs/recipes.md` only if a recipe's site list moved. Verify: `rg "Favourite"
   CONTEXT.md` shows the term.
@@ -60,51 +52,38 @@ Run every make target in the foreground and wait for it. Never background a comm
   Update `GuiLaunchShowsView` mapping so a saved Favourites becomes All. This unit may leave the
   workspace uncompilable if `Favourites` has unhandled arms; record that for 3.2. Verify:
   `rg "GuiShowsView|LibraryShowsViewDropdown" crates` returns no hit.
-- [ ] 3.2 Add `GuiLibraryView::choices(destination)` (Shows: All, New, Upcoming, Favourites;
-  other Emby destinations: All, Favourites) and handle `Favourites` in every `match` the compiler
-  names, including `set_shows_view`'s successor and `select_shows_row`. Verify: a core test that
-  Shows returns four entries in order and a plain library and Music return two.
+- [ ] 3.2 Add `GuiLibraryView::choices(destination)` and handle `Favourites` in every `match` the
+  compiler names, including `set_shows_view`'s successor and `select_shows_row`. Shows offers All,
+  New, Upcoming, and Favourites in that order; every other Emby destination offers All and
+  Favourites.
 - [ ] 3.3 Paint the dropdown in the plain-library and Music list headers through the same
-  `LibraryViewDropdown`, with Audiobookshelf and Feeds untouched. Verify: component tests that a
-  Movies header and a Music header paint a dropdown marking All, and an Audiobooks header paints
-  none; extend `library_shows_view_dropdown/tests.rs` for the fourth Shows entry. Music and
-  feed-group Emby headers paint the collection dropdown and the view dropdown together (the
-  header's `collections`/`view` branches stop being exclusive); the collection dropdown is hidden
-  while the view is Favourites. Follow the design D5 title line order and Favourites header rules.
-  Add a component test for both states, a test that a feed-group header paints the collection
-  trigger, then the view trigger, then the sort control, and a test that a Music Favourites header
-  paints no tree buttons, no collection dropdown, and no sort control.
-- [ ] 3.4 Pin launch persistence: Favourites saves as All and only Shows persists. Verify: a
-  `gui_launch_state` round-trip test with Favourites active.
+  `LibraryViewDropdown`, with Audiobookshelf and Feeds untouched. Music and feed-group Emby headers
+  paint the collection dropdown and the view dropdown together (the header's `collections`/`view`
+  branches stop being exclusive); the collection dropdown is hidden while the view is Favourites
+  and returns with its pick intact on All. Follow the design D5 title line order and Favourites
+  header rules: no sort control, no tree buttons, no collection dropdown.
+- [ ] 3.4 Pin launch persistence: Favourites saves as All and only Shows persists.
+- [ ] 3.5 Paint the Library Status bar's location as design D5 states: while the view is
+  Favourites it names Favourites in place of the collection names.
 
 ## 4. Favourites data path
 
 - [ ] 4.1 Add the favourites store (`GuiSectionRequest` per library id plus the in-place refresh
   set) to `GuiClientState`, `LibraryFetchEvent::Favourites`, and its worker spawn using
   `get_favourites` (design D6). Entering the view starts a first load or an in-place refresh
-  (design D7). Verify: a core test that setting the view to Favourites sends one fetch, that
-  landing fills the store, and that a second entry refreshes in place.
+  (design D7).
 - [ ] 4.2 Project the store into the list parts: the collections-first, Title-ordered
   `GuiEmbyRowFrame` list (design D6, D9) as an optional part on the Shows, Music, and
   plain-library list frames, with `loading` and `failed`. Add the Favourites Hero and the
-  separate favourites pick (design D6). Verify: projection tests for the TV ordering (three
-  Series, then the Episode), a Movies list, and a Music list with an artist, an album, and a song;
-  a test that a selected Series favourite paints a Hero; and a test that a favourites select
-  leaves the All list's `picked_row` unchanged.
+  separate favourites pick (design D6).
 - [ ] 4.3 Resolve a favourites id in `item_actions::library_item` and the select, play, shuffle,
-  and enqueue paths, and select into the plain-library Hero producer. The favourites store resolves an id only while
-  that library's active view is Favourites. Verify: a test that, with the store holding artist X
-  and the view on All, a Music tree artist row with id X resolves no menu entry; tests that playing a
-  favourite episode plays it, Play All on a favourite series matches the All view's call, and an
-  unknown id logs a stale-item line and does nothing. Route a favourite MusicArtist row's Play
-  All, Shuffle, and Add to Queue (row controls and menu entries) through the design D8 artist
-  path, and update the `get_artist_audio_tracks` doc comment. Verify also: Play All on a
-  favourite artist sends one `ArtistIds` request and plays the tracks in album, disc, and track
-  order; a menu Shuffle on a favourite artist sends no `ParentId` request.
+  and enqueue paths, and select into the Favourites Hero of design D6, not the plain-library Hero
+  producer, whose `hero_item` gate paints no Hero for a folder or a non-`Movie`. The favourites
+  store resolves an id only while that library's active view is Favourites. Route a favourite
+  MusicArtist row's Play All, Shuffle, and Add to Queue (row controls and menu entries) through
+  the design D8 artist path, and update the `get_artist_audio_tracks` doc comment.
 - [ ] 4.4 After a favourite change succeeds, flip the flag in the GUI stores by id and, when the
-  active view is Favourites, refetch it so an unfavourited row leaves (design D4). Verify: a test
-  that unfavouriting from the open view removes the row and that a favourite added from the All
-  view appears on the next entry.
+  active view is Favourites, refetch it so an unfavourited row leaves (design D4).
 
 ## 5. Favourites list component
 
@@ -112,14 +91,10 @@ Run every make target in the foreground and wait for it. Never background a comm
   flat-row parts, painted in the list column while the library's view is Favourites; the Hero shows
   the selected favourite; pressing All restores the All list with its selection and scroll
   (spec "A Favourites view replaces the destination's list column"). The list keeps its own
-  `ListScroll` per library (design D6). The refresh button in the Favourites view refetches the
-  favourites list. Verify: component tests that the list paints the rows, the empty list paints
-  none, an All press restores the stored selection, and the All scroll offset survives a round
-  trip through Favourites; a test that a refresh press in Favourites sends one favourites fetch;
-  no layout or font-metric assertions.
+  `ListScroll` per library (design D6), paints no letter headings and no rail, and its refresh
+  button refetches the favourites list.
 - [ ] 5.2 Wire row press, double-click play, and right-click menu to the existing shared commands
-  by stable id. Verify: a component test that a right-click sends the row-menu command with the
-  row's Service id.
+  by stable id.
 - [ ] 5.3 Update `docs/architecture/gui-client.md` for the view type, the favourites store, and the
   list part, and add `docs/invariants/` text only if a new property that no type enforces appears.
   Verify: `rg "Favourites" docs/architecture/gui-client.md` shows the section.
