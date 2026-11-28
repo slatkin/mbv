@@ -77,3 +77,23 @@ fn make_music_app(albums: Vec<EmbyItem>) -> super::App {
 }
 
 mod candidate_state;
+
+#[test]
+fn album_only_levels_present_the_library_as_one_implicit_group() {
+    let mut app = make_app_stub();
+    app.seed_music_levels_for_test(&["album"]);
+    app.push_library_for_test(make_music_library_tab());
+    assert!(app.is_grouped_music_library(0));
+
+    let mut root = make_music_album_level(vec![make_item("Some Album", "MusicAlbum")]);
+    root.parent_id = "lib-music".into();
+    app.install_implicit_music_group_root(0, &mut root);
+    assert_eq!(root.items.len(), 1);
+    assert_eq!(root.items[0].id, "lib-music");
+    assert_eq!(root.items[0].name, "Music");
+
+    let mut album_level = make_music_album_level(vec![make_item("Some Album", "MusicAlbum")]);
+    album_level.parent_id = "lib-music".into();
+    app.libs[0].nav_stack = vec![root, album_level];
+    assert!(app.is_music_group_view(0));
+}

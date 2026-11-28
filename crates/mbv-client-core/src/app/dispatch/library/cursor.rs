@@ -23,6 +23,11 @@ impl App {
         if stack_len < 1 {
             return false;
         }
+        // An implicit-group config (`["album"]`) has a synthetic group level
+        // above its one configured level, so the album level sits one deeper.
+        if crate::app::dispatch::music::is_implicit_group_levels(&self.music_levels) {
+            return stack_len == 2;
+        }
         self.music_levels
             .get(stack_len - 1)
             .is_some_and(|s| s == "album")

@@ -91,6 +91,7 @@ fn build_navigate_landing(
     item_id: &str,
     item_type: &str,
     lib_id: &str,
+    lib_name: &str,
     levels: &[String],
     cached_album_index: Option<&AlbumIndex>,
 ) -> Result<NavigateLanding, mbv_emby::EmbyError> {
@@ -105,7 +106,14 @@ fn build_navigate_landing(
         tracing::debug!(name: "navigate.ancestors.fetched", target: "navigate", ancestor_items = ?ancestors.iter().map(|ancestor| format!("{}({})", ancestor.name, ancestor.id)).collect::<Vec<_>>(), "navigation ancestors fetched");
         resolve_reveal_target(item_type, &item, Some(&ancestors))
     })?;
-    landing_for_target(client, &item, reveal, lib_id, levels, cached_album_index)
+    landing_for_target(
+        client,
+        &item,
+        reveal,
+        (lib_id, lib_name),
+        levels,
+        cached_album_index,
+    )
 }
 
 /// The navigable ancestors inside the library: `get_ancestors` is
@@ -123,7 +131,7 @@ fn landing_for_target(
     client: &EmbyClient,
     item: &EmbyItem,
     reveal: RevealTarget,
-    lib_id: &str,
+    (lib_id, lib_name): (&str, &str),
     levels: &[String],
     cached_album_index: Option<&AlbumIndex>,
 ) -> Result<NavigateLanding, mbv_emby::EmbyError> {
@@ -173,8 +181,16 @@ fn landing_for_target(
             // defined by `music.levels`, NOT the raw `get_ancestors` depth.
             // A walk miss is a configured-path failure (flash), never a
             // silent no-op.
-            let ancestors =
-                configured_album_ancestors(client, lib_id, levels, &album, cached_album_index)?;
+            let ancestors = if crate::app::dispatch::music::is_implicit_group_levels(levels) {
+                // `levels = ["album"]`: the albums are the library's own
+                // children, and the library is the one implicit group.
+                vec![AlbumPathPart {
+                    id: lib_id.to_string(),
+                    name: lib_name.to_string(),
+                }]
+            } else {
+                configured_album_ancestors(client, lib_id, levels, &album, cached_album_index)?
+            };
             // Deep selection (task 6.2, design D6): an Audio-track reveal
             // rides its own id on the Album landing.
             let track_id = item.is_audio().then(|| item.id.clone());
@@ -318,6 +334,11 @@ impl App {
         };
         let tx = self.channels.lib_tx.clone();
         let music_levels = self.music_levels.clone();
+        let library_names: Vec<String> = self
+            .libs
+            .iter()
+            .map(|lib| lib.library.display_name())
+            .collect();
         let target_ctype = match item_type.as_str() {
             "Series" | "Episode" | "Season" => "tvshows",
             "Movie" => "movies",
@@ -356,6 +377,7 @@ impl App {
                 &item_id,
                 &item_type,
                 &lib_id,
+                library_names.get(lib_idx).map_or("", String::as_str),
                 &music_levels,
                 cached_album_index.as_deref(),
             ) {

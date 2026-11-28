@@ -121,6 +121,9 @@ impl App {
         let library_id = lib.library.id.clone();
         let library_name = lib.library.display_name();
         let grouped_music = self.is_grouped_music_library(lib_idx);
+        // An implicit-group library's root level is its one synthetic group
+        // (the landing's first ancestor), not a listing of the albums.
+        let implicit_group = self.implicit_music_group(lib_idx);
         let Some(client) = self.emby_snapshot() else {
             return false;
         };
@@ -144,12 +147,15 @@ impl App {
             targets.push(entry.album.id.clone());
             let mut nav_stack = Vec::new();
             for ((parent_id, title), target_id) in parents.into_iter().zip(targets) {
-                let items = match fetch(&parent_id) {
-                    Ok(items) => items,
-                    Err(error) => {
-                        let _ = tx.send(LibEvent::Error(error.to_string()));
-                        return;
-                    }
+                let items = match (nav_stack.is_empty(), &implicit_group) {
+                    (true, Some(group)) => vec![group.clone()],
+                    _ => match fetch(&parent_id) {
+                        Ok(items) => items,
+                        Err(error) => {
+                            let _ = tx.send(LibEvent::Error(error.to_string()));
+                            return;
+                        }
+                    },
                 };
                 let total_count = items.len();
                 let mut level = BrowseLevel {

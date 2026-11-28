@@ -25,7 +25,18 @@ impl App {
     /// Re-warm only happens when the Service is replaced (`clear_emby_memory`
     /// clears level state); reconnects dedupe through `LevelFillState`.
     pub(in crate::app) fn spawn_music_group_warmup(&mut self) {
-        let library_ids = self.music_group_warmup_library_ids();
+        let mut library_ids = self.music_group_warmup_library_ids();
+        // An implicit-group library's one group is the library itself, so its
+        // level fill queues directly: there is no group listing to fetch.
+        let implicit_ids: Vec<String> = (0..self.libs.len())
+            .filter(|&lib_idx| self.implicit_music_group(lib_idx).is_some())
+            .map(|lib_idx| self.libs[lib_idx].library.id.clone())
+            .filter(|id| library_ids.contains(id))
+            .collect();
+        library_ids.retain(|id| !implicit_ids.contains(id));
+        for id in implicit_ids {
+            self.enqueue_level_artist_warmup(id);
+        }
         if library_ids.is_empty() {
             return;
         }
@@ -64,11 +75,9 @@ impl App {
 
     /// The libraries whose group levels warm up at Service Ready (design
     /// D5): every Emby music library while the configured music levels
-    /// start with `"group"` — the same gate the group view itself uses.
+    /// are grouped (start with `"group"`, or the implicit-group `["album"]`) —
+    /// the same gate the group view itself uses.
     pub(in crate::app) fn music_group_warmup_library_ids(&self) -> Vec<String> {
-        if self.music_levels.first().is_none_or(|s| s != "group") {
-            return Vec::new();
-        }
         self.libs
             .iter()
             .enumerate()

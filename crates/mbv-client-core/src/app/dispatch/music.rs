@@ -1,6 +1,7 @@
 use crate::app::dispatch::library::browse::align_level_to_tv_mode;
 use crate::app::state::app_struct::TvUpcomingFetchState;
 use crate::app::{App, BrowseLevel};
+use mbv_emby_model::EmbyItem;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
 use mbv_ui_model::sort_filter::LIBRARY_PILL_THRESHOLD;
 
@@ -16,7 +17,23 @@ fn wrapped_index(current: usize, delta: i64, count: usize) -> usize {
         .expect("wrapped index fits in usize")
 }
 
+/// True for the group-less configuration `levels = ["album"]`: the library's
+/// own children are the albums, so the library itself is the one implicit
+/// group (a synthetic group level above the album level).
+pub(in crate::app) fn is_implicit_group_levels(music_levels: &[String]) -> bool {
+    matches!(music_levels, [only] if only == "album")
+}
+
+/// The nav-stack depth of the album level in the grouped shape: the configured
+/// level count, plus the synthetic group level an implicit-group config lacks.
+pub(in crate::app) fn grouped_music_depth(music_levels: &[String]) -> usize {
+    music_levels.len() + usize::from(is_implicit_group_levels(music_levels))
+}
+
 fn is_grouped_music_path(music_levels: &[String], nav_stack: &[BrowseLevel]) -> bool {
+    if is_implicit_group_levels(music_levels) {
+        return nav_stack.len() == 2;
+    }
     music_levels.first().is_some_and(|level| level == "group")
         && nav_stack.len() >= 2
         && music_levels
@@ -33,10 +50,53 @@ impl App {
         self.libs
             .get(lib_idx)
             .is_some_and(|lib| lib.library.collection_type == "music")
-            && self
+            && (self
                 .music_levels
                 .first()
                 .is_some_and(|level| level == "group")
+                || is_implicit_group_levels(&self.music_levels))
+    }
+
+    /// The synthetic group item an implicit-group library (`levels =
+    /// ["album"]`) shows as its one group: the library itself, so the group's
+    /// id is the library id and every group-scoped query (the album listing,
+    /// the recursive artist fill) addresses the library's own children.
+    pub(in crate::app) fn implicit_music_group(&self, lib_idx: usize) -> Option<EmbyItem> {
+        let lib = self.libs.get(lib_idx)?;
+        (lib.library.collection_type == "music" && is_implicit_group_levels(&self.music_levels))
+            .then(|| {
+                let mut group = EmbyItem::folder(
+                    lib.library.id.clone(),
+                    lib.library.display_name(),
+                    String::new(),
+                );
+                group.item_type = "Folder".into();
+                group
+            })
+    }
+
+    /// Replaces an implicit-group library's root level with its one synthetic
+    /// group. The root listing is the albums themselves, so every producer of
+    /// the root level (load, refresh, restore, landing) installs the group
+    /// here and the grouped view sees the same two-level shape a
+    /// `["group", "album"]` config has. Other levels and libraries pass
+    /// through untouched.
+    pub(in crate::app) fn install_implicit_music_group_root(
+        &self,
+        lib_idx: usize,
+        level: &mut BrowseLevel,
+    ) {
+        let Some(group) = self.implicit_music_group(lib_idx) else {
+            return;
+        };
+        if level.items.len() == 1 && level.items[0].id == group.id {
+            return;
+        }
+        level.items = vec![group];
+        level.rows = ServerRows::loaded(1, 1);
+        level.all_items = None;
+        level.letter_filter = None;
+        level.resting = BrowseResting::new(0, 0);
     }
 
     pub fn is_music_group_view(&self, lib_idx: usize) -> bool {
@@ -81,7 +141,7 @@ impl App {
                 "Could not resolve the configured music album level",
             ));
         }
-        if nav_stack.len() != self.music_levels.len()
+        if nav_stack.len() != grouped_music_depth(&self.music_levels)
             || lib.library.collection_type != "music"
             || !is_grouped_music_path(&self.music_levels, nav_stack)
         {
@@ -541,7 +601,7 @@ impl App {
             return;
         }
         let should_push = self.libs[lib_idx].library.collection_type == "music"
-            && self.music_levels.first().is_some_and(|s| s == "group")
+            && self.is_grouped_music_library(lib_idx)
             && self.libs[lib_idx].nav_stack.len() == 1
             && !self.libs[lib_idx].nav_stack[0].items.is_empty();
         if !should_push {
@@ -592,7 +652,7 @@ impl App {
         let should_auto_push_music = self.tab.emby_library_index() == Some(lib_idx)
             && self.libs.get(lib_idx).is_some_and(|lib| {
                 lib.library.collection_type == "music"
-                    && self.music_levels.first().is_some_and(|s| s == "group")
+                    && self.is_grouped_music_library(lib_idx)
                     && lib.nav_stack.len() == 1
                     && !lib.nav_stack[0].items.is_empty()
             });

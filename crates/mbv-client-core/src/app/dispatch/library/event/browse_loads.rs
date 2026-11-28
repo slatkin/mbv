@@ -165,6 +165,11 @@ impl App {
         // (including refresh and restore) applies the same server-row
         // accounting invariant.
         self.retain_grouped_music_level_items(lib_idx, &mut level);
+        // An implicit-group library's root listing is its albums; the root
+        // level shows the one synthetic group instead.
+        if self.libs[lib_idx].nav_stack.len() == 1 {
+            self.install_implicit_music_group_root(lib_idx, &mut level);
+        }
         // The drain's own parent id tells a root load apart from a deeper
         // level's load for the pending Series landing retry below.
         self.handle_loaded_level(lib_idx, parent_id, level);
@@ -324,6 +329,13 @@ impl App {
         });
         if updated {
             let grouped_music = self.is_grouped_music_library(lib_idx);
+            if self.libs[lib_idx].nav_stack.len() == 1
+                && let Some(group) = self.implicit_music_group(lib_idx)
+                && let Some(root) = self.libs[lib_idx].nav_stack.first_mut()
+            {
+                root.items = vec![group];
+                root.rows = ServerRows::loaded(1, 1);
+            }
             if let Some(level) = self
                 .libs
                 .get_mut(lib_idx)
@@ -422,6 +434,9 @@ impl App {
     ) -> Vec<BrowseLevel> {
         for (index, level) in nav_stack.iter_mut().enumerate() {
             self.retain_grouped_music_level_items(lib_idx, level);
+            if index == 0 {
+                self.install_implicit_music_group_root(lib_idx, level);
+            }
             // A position saved before pill fetch fields were aligned carries the
             // legacy `SortName` root key on a Latest/Upcoming level; align it so
             // the next pill response is not dropped as stale (#745 guard).
