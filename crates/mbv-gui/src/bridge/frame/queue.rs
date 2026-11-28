@@ -426,6 +426,9 @@ impl From<&MediaListTrailing> for GuiTrailing {
 pub enum GuiMediaKind {
     Collection,
     Media,
+    /// A music track: exempt from played state, so its row shows no played or
+    /// unplayed mark, and its now-playing row still shows the progress ring.
+    Music,
 }
 
 impl From<MediaKind> for GuiMediaKind {
@@ -433,6 +436,7 @@ impl From<MediaKind> for GuiMediaKind {
         match kind {
             MediaKind::Collection => Self::Collection,
             MediaKind::Media => Self::Media,
+            MediaKind::Music => Self::Music,
         }
     }
 }

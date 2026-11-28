@@ -82,7 +82,11 @@ fn queue_media_row_at(
             let time_text = queue_row_time_text(pos_ticks, duration_ticks, false);
             (!time_text.is_empty()).then_some(time_text)
         },
-        kind: MediaKind::Media,
+        kind: if is_music(&slot.item) {
+            MediaKind::Music
+        } else {
+            MediaKind::Media
+        },
         semantic_state,
     }
 }

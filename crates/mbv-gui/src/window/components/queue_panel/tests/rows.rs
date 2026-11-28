@@ -3,6 +3,7 @@
 //! partial-progress states, the progress ring, the right column's duration, the
 //! canvas one-liner, the four row looks, and the hovered row's chrome.
 
+use crate::bridge::frame::queue::GuiMediaKind;
 use blitz_dom::local_name;
 
 use super::harness::*;
@@ -165,6 +166,62 @@ fn only_a_row_with_progress_paints_the_ring() {
     assert!(
         ring_position < duration_position,
         "the ring leads the duration"
+    );
+}
+
+/// Contract (spec `gui-client` "A music row shows no played mark", "A playing
+/// music row shows the progress ring"): music is exempt from played state, so
+/// an idle music row paints no ring and an empty mark slot whatever its state,
+/// and the playing music row paints the ring that follows the playhead.
+#[test]
+fn a_music_row_paints_no_mark_and_only_the_playing_one_paints_the_ring() {
+    let music = |row| match row {
+        GuiQueueRow::Item {
+            slot,
+            ordinal,
+            primary,
+            secondary,
+            trailing,
+            duration,
+            state,
+            ..
+        } => GuiQueueRow::Item {
+            slot,
+            ordinal,
+            primary,
+            secondary,
+            trailing,
+            duration,
+            kind: GuiMediaKind::Music,
+            state,
+        },
+        other => other,
+    };
+    let rows = vec![
+        music(item(1)),
+        music(in_state(item(2), GuiSemanticState::Played)),
+        music(in_state(
+            item(3),
+            GuiSemanticState::NowPlaying {
+                tracks_progress: false,
+            },
+        )),
+        item(4),
+    ];
+    let fixture = built_with_anchor(queue_panel_app, queue(rows), summary(), 3);
+
+    assert_eq!(
+        ring_percents(&fixture),
+        vec![None, None, Some("30".to_owned()), None]
+    );
+    assert_eq!(
+        mark_values(&fixture),
+        vec![
+            Some("none".to_owned()),
+            Some("none".to_owned()),
+            Some("none".to_owned()),
+            Some("unplayed".to_owned())
+        ]
     );
 }
 

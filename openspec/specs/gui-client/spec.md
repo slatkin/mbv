@@ -534,7 +534,7 @@ The panel SHALL show one chip each for the video stream, the audio track, and th
 
 ### Requirement: The queue shows a row menu and drag reorder
 
-The queue header SHALL hold only what the requirement "The queue header holds the chooser and its controls" (`gui-queue-chooser`) names. Every row SHALL have the same fixed height and SHALL carry its queue ordinal, its title, and a right column. The right column SHALL show the item's duration in every row state, except while the row shows its hover Play control in its place. A row with progress (partly played, or now playing) SHALL show a progress ring after its title; the ring SHALL be the row's only progress mark and SHALL NOT add height to the row. The now-playing row's ring SHALL follow the playhead. Music is a no-progress media type: a music row SHALL show no ring, whether it is playing or not. A row SHALL show no time-left text and no start mark. A played row and an unplayed row SHALL each show its played or unplayed mark before the duration in the right column, as the requirement "Rows mark their played state" states; a partly played row is an unplayed row. The now-playing row SHALL keep its own look and SHALL show neither mark, and no row SHALL be struck through. Every queue edit SHALL be a request to the Player owner of the shown queue. The window content SHALL NOT change the canonical queue.
+The queue header SHALL hold only what the requirement "The queue header holds the chooser and its controls" (`gui-queue-chooser`) names. Every row SHALL have the same fixed height and SHALL carry its queue ordinal, its title, and a right column. The right column SHALL show the item's duration in every row state, except while the row shows its hover Play control in its place. A row with progress (partly played, or now playing) SHALL show a progress ring after its title; the ring SHALL be the row's only progress mark and SHALL NOT add height to the row. The now-playing row's ring SHALL follow the playhead. Music is exempt from played state: a music row SHALL show neither the played mark nor the unplayed mark and SHALL keep the ordinary title look, whatever played facts the item carries. A music row has no resume progress, so only the now-playing music row SHALL show a ring, and that ring SHALL follow the playhead. A row SHALL show no time-left text and no start mark. A played row and an unplayed row SHALL each show its played or unplayed mark before the duration in the right column, as the requirement "Rows mark their played state" states; a partly played row is an unplayed row. The now-playing row SHALL keep its own look and SHALL show neither mark, and no row SHALL be struck through. Every queue edit SHALL be a request to the Player owner of the shown queue. The window content SHALL NOT change the canonical queue.
 
 #### Scenario: Rows show their state
 
@@ -557,10 +557,15 @@ The queue header SHALL hold only what the requirement "The queue header holds th
 - **WHEN** the now-playing item plays on
 - **THEN** its row's ring advances with the playhead, and its right column keeps the item's duration
 
-#### Scenario: A music row shows no progress ring
+#### Scenario: A music row shows no played mark
 
-- **WHEN** the queue holds a music item, playing or not
-- **THEN** its row shows no progress ring, and its right column keeps the item's duration
+- **WHEN** the queue holds a music item that is not playing, whether the item carries a played flag or not
+- **THEN** its row shows no played mark, no unplayed mark, and no progress ring, and its right column keeps the item's duration
+
+#### Scenario: A playing music row shows the progress ring
+
+- **WHEN** the queue's now-playing item is music
+- **THEN** its row shows a progress ring that follows the playhead, and its right column keeps the item's duration
 
 #### Scenario: The queue header counts the queue
 

@@ -15,7 +15,7 @@
 
 use dioxus_native::prelude::*;
 
-use crate::bridge::frame::queue::{GuiQueue, GuiQueueRow, GuiSemanticState};
+use crate::bridge::frame::queue::{GuiMediaKind, GuiQueue, GuiQueueRow, GuiSemanticState};
 use crate::window::components::play_mark::{PlayMark, RowPlay};
 use crate::window::components::queue_panel::geometry::{ORDINAL_COL_PX, RIGHT_COL_PX};
 use crate::window::playhead::Playhead;
@@ -59,6 +59,8 @@ pub(super) struct ItemRow {
     /// state (design D3); `None` while the frame knows no runtime.
     duration: Option<String>,
     pub(super) state: GuiSemanticState,
+    /// Music is exempt from played state: no mark, no played look.
+    pub(super) music: bool,
 }
 
 impl ItemRow {
@@ -71,6 +73,7 @@ impl ItemRow {
                 primary,
                 duration,
                 state,
+                kind,
                 ..
             } => Some(Self {
                 slot: *slot,
@@ -78,6 +81,7 @@ impl ItemRow {
                 primary: primary.clone(),
                 duration: duration.clone(),
                 state: state.clone(),
+                music: *kind == GuiMediaKind::Music,
             }),
             _ => None,
         }
@@ -129,7 +133,7 @@ pub(super) fn row_look(row: &ItemRow, queue: &GuiQueue) -> RowLook {
     }
     // The now-playing branch returns above, so every row here carries a play
     // state (design D4 of `gui-played-row-marks`).
-    let play = RowPlay::of_queue(&row.state);
+    let play = RowPlay::of_queue(&row.state).filter(|_| !row.music);
     let background = if queue.marks.contains(&row.slot) {
         Some(ef_var(EfToken::Bg3))
     } else if hovered {
@@ -166,7 +170,9 @@ fn playhead_percent(playhead: &Playhead) -> i64 {
 fn row_progress(row: &ItemRow, playhead: &Playhead) -> Option<i64> {
     match row.state {
         GuiSemanticState::NowPlaying { tracks_progress } => {
-            if !tracks_progress {
+            // A playing music row shows the ring too: its frame state carries
+            // no percentage, but the playhead does.
+            if !tracks_progress && !row.music {
                 return None;
             }
             let active_slot = playhead
@@ -347,7 +353,9 @@ pub(super) fn RowCells(props: RowCellsProps) -> Element {
                     {progress_ring(look, percent)}
                 }
                 if chrome == RowChrome::Row {
-                    PlayMark { play: RowPlay::mark_of_queue(&row.state) }
+                    PlayMark {
+                        play: RowPlay::mark_of_queue(&row.state).filter(|_| !row.music),
+                    }
                 }
                 if let Some(duration) = duration {
                     span {

@@ -46,6 +46,9 @@ impl ActiveProgress {
 pub enum MediaKind {
     Collection,
     Media,
+    /// A playable music leaf (a track): a `Media` row that is exempt from
+    /// played state and resume. It carries no played or unplayed mark.
+    Music,
 }
 
 /// Provider-neutral semantic state used by canonical media-list rows.
