@@ -17,3 +17,12 @@ test-threads = 8
 [[profile.default.overrides]]
 filter = 'package(mbv-player) | package(mbv-remote-player) | package(mbv-daemon)'
 threads-required = 2
+
+# Local test-suite length budget. Only `make test` uses this profile
+# (`--profile local`); CI runs nextest without it. A run that takes longer than
+# the cap is stopped and fails. The cap is the measured baseline plus 25%
+# (2026-11-28: whole workspace, debug, 29.3s + 25% = 37s). A run over the cap
+# is a violation: find the slow tests and fix them. Raise the cap only with a
+# new measured baseline, and update the numbers here.
+[profile.local]
+global-timeout = "37s"

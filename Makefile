@@ -102,7 +102,7 @@ editorconfig:
 	editorconfig-checker
 
 test:
-	$(CARGO) nextest run $(SCOPE)
+	$(CARGO) nextest run --profile local $(SCOPE)
 
 # (CI: Ast-grep tripwires)
 ast:
